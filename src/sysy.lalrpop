@@ -1,4 +1,7 @@
 use crate::ast::*;
+use crate::ast::decl::*;
+use crate::ast::expr::*;
+use crate::ast::stmt::*;
 // lalrpop 里的约定
 grammar;
 
