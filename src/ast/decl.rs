@@ -1,4 +1,5 @@
 use super::stmt::*;
+use koopa::ir::TypeKind;
 #[derive(Debug)]
 pub struct FuncDef {
     pub func_type: FuncType,

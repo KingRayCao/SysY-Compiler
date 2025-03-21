@@ -1,4 +1,5 @@
+use super::exp::*;
 #[derive(Debug)]
-pub struct Stmt {
-    pub num: i32,
+pub enum Stmt {
+    ReturnStmt(Box<Exp>),
 }

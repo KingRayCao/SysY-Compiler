@@ -36,8 +36,7 @@ fn value_to_asm(value: koopa::ir::Value, func_data: &koopa::ir::FunctionData) ->
             return format!("  li a0, {}\n", int.value());
         }
         ValueKind::Return(ret) => {
-            return value_to_asm(ret.value().unwrap(), func_data)
-                + "  ret\n";
+            return value_to_asm(ret.value().unwrap(), func_data) + "  ret\n";
         }
         _ => unreachable!(),
     }
