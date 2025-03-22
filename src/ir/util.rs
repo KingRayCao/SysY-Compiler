@@ -13,10 +13,13 @@ pub fn add_value(
 ) -> Result<(), String> {
     let func_data = program.func_mut(context.current_func.unwrap());
     let bb = context.current_block.unwrap();
-    func_data
+    let insert_ok = func_data
         .layout_mut()
         .bb_mut(bb)
         .insts_mut()
         .push_key_back(value);
-    Ok(())
+    match insert_ok {
+        Ok(_) => Ok(()),
+        Err(value) => Err(format!("Failed to insert value: {:?}", value)),
+    }
 }

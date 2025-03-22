@@ -16,7 +16,7 @@ pub struct IrContext {
 impl IrGenerator for CompUnit {
     type Output = Result<(), String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
-        let func = self.func_def.build_ir(program, context);
+        self.func_def.build_ir(program, context).unwrap();
         Ok(())
     }
 }
