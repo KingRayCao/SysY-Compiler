@@ -26,13 +26,59 @@ Comma<T>: Vec<T> = {
         }
     }
 };
-// 表达式
+// 连续表达式
 Tier<Op,NextTier>: Box<Expr> = {
     Tier<Op,NextTier> Op NextTier => Box::new(Expr::Op(<>)),
     NextTier
 };
 
+// ============= CompUnit =============
+
 pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit { <> };
+
+// ============= Decl && Def =============
+
+Decl: Decl = {
+  <const_decl: ConstDecl> => Decl::ConstDecl (Box::new(const_decl)),
+  <var_decl: VarDecl> => Decl::VarDecl (Box::new(var_decl)),
+}
+
+// ---- Constant Declaration ----
+
+ConstDecl: ConstDecl = {
+  "const" <btype: BType> <const_defs: ConstDefs> ";" => ConstDecl { <> },
+}
+
+BType: BType = "int" => BType::Int;
+
+ConstDefs = Comma<ConstDef>;
+
+ConstDef: ConstDef = {
+  <ident: Ident> <index: ("[" <ConstExp> "]")*> "=" <const_init_val: ConstInitVal> => ConstDef { ident: ident, index: index, const_init_val: Box::new(const_init_val) },
+}
+
+ConstInitVal: ConstInitVal = {
+  <const_exp: ConstExp> => ConstInitVal::ConstExp (Box::new(const_exp)),
+}
+
+// ---- Variable Declaration ----
+
+VarDecl: VarDecl = {
+  <btype: BType> <var_defs: VarDefs> ";" => VarDecl { <> },
+}
+
+VarDefs = Comma<VarDef>;
+
+VarDef: VarDef = {
+  <ident: Ident> <index: ("[" <ConstExp> "]")*> => VarDef::VarDef { ident: ident, index: index },
+  <ident: Ident> <index: ("[" <ConstExp> "]")*> "=" <init_val: InitVal> => VarDef::VarDefInit { ident: ident, index: index, init_val: Box::new(init_val) },
+}
+
+InitVal: InitVal = {
+  <exp: Exp> => InitVal::Exp (Box::new(exp)),
+}
+
+// ---- Function Definition ----
 
 FuncDef: FuncDef = {
   <func_type: FuncType> <ident: Ident> "(" ")" <block: Block> => {
@@ -42,17 +88,39 @@ FuncDef: FuncDef = {
 
 FuncType: FuncType = "int" => FuncType::Int;
 
+// ============= Block && Stmt =============
+
+// ---- Block ----
+
+Block: Block = "{" <block_items: BlockItem*> "}" => Block { <> };
+
+BlockItem: BlockItem = {
+  <decl: Decl> => BlockItem::Decl (Box::new(decl)),
+  <stmt: Stmt> => BlockItem::Stmt (Box::new(stmt)),
+}
+
+// ---- Statement ----
+
 Stmt: Stmt ={
+  <lval: LVal> "=" <exp: Exp> ";" => Stmt::AssignStmt (Box::new(lval), Box::new(exp)),
   "return" <exp: Exp> ";" => Stmt::ReturnStmt (Box::new(exp)),
 } 
 
+// ---- Expression ----
+
 Exp: Exp = <l_or_exp: LOrExp> => Exp::LOrExp (Box::new(l_or_exp));
+
+LVal: LVal = {
+  <ident: Ident> <index: ("[" <Exp> "]")*> => LVal { ident: ident, index: index },
+}
 
 PrimaryExp: PrimaryExp = {
   "(" <exp: Exp> ")" => PrimaryExp::BracketExp (Box::new(exp)),
   <lval: LVal> => PrimaryExp::LVal (Box::new(lval)),
   <number: Number> => PrimaryExp::Number ( <> ),
 }
+
+Number: i32 = <num: IntConst> => <>;
 
 UnaryExp: UnaryExp = {
   <unary_op: UnaryOp> <exp: UnaryExp> => UnaryExp::UnaryExp (unary_op, Box::new(exp)),
@@ -118,52 +186,14 @@ LOrExp: LOrExp = {
   <l_or_exp: LOrExp> "||" <l_and_exp: LAndExp> => LOrExp::LOrExp (Box::new(l_or_exp), Box::new(l_and_exp)),
 }
 
-Number: i32 = <num: IntConst> => <>;
-
-
-// 如果匹配到标识符, 就返回这个字符串
-// 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
-// 关于尖括号到底代表什么, 请 RTFM
-Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
-
-Decl: Decl = {
-  <const_decl: ConstDecl> => Decl::ConstDecl (Box::new(const_decl)),
-}
-
-ConstDecl: ConstDecl = {
-  "const" <btype: BType> <const_defs: ConstDefs> ";" => ConstDecl { <> },
-}
-
-BType: BType = "int" => BType::Int;
-
-ConstDefs = Comma<ConstDef>;
-
-
-ConstDef: ConstDef = {
-  <ident: Ident> <index: ("[" <ConstExp> "]")*> "=" <const_init_val: ConstInitVal> => ConstDef { ident: ident, index: index, const_init_val: Box::new(const_init_val) },
-}
-
-ConstInitVal: ConstInitVal = {
-  <const_exp: ConstExp> => ConstInitVal::ConstExp (Box::new(const_exp)),
-}
-
-Block: Block = "{" <block_items: BlockItem*> "}" => Block { <> };
-
-BlockItem: BlockItem = {
-  <decl: Decl> => BlockItem::Decl (Box::new(decl)),
-  <stmt: Stmt> => BlockItem::Stmt (Box::new(stmt)),
-}
-
-LVal: LVal = {
-  <ident: Ident> <index: ("[" <Exp> "]")*> => LVal { ident: ident, index: index },
-}
-
-
 ConstExp: ConstExp = {
   <exp: Exp> => ConstExp { exp: Box::new(exp) },
 }
 
-// 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
+// ============= Ident && IntConst =============
+
+Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
+
 IntConst: i32 = {
   r"[1-9][0-9]*" => i32::from_str_radix(<>, 10).unwrap(),
   r"0[0-7]*" => i32::from_str_radix(<>, 8).unwrap(),

@@ -13,12 +13,46 @@ impl IrGenerator for Exp {
     }
 }
 
+pub enum LValValue {
+    Var(Value),
+    Const(Value),
+}
+
+impl IrGenerator for LVal {
+    type Output = Result<LValValue, String>;
+    fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
+        if self.index.is_empty() {
+            let entry = context.symbol_tables.get_symbol(&self.ident).unwrap();
+            match entry {
+                SymbolTableEntry::Var(_, value) => Ok(LValValue::Var(*value)),
+                SymbolTableEntry::Const(_, value) => {
+                    let val = *value;
+                    let const_val = new_value_builder(program, context).integer(val);
+                    Ok(LValValue::Const(const_val))
+                }
+            }
+        } else {
+            todo!()
+        }
+    }
+}
+
 impl IrGenerator for PrimaryExp {
     type Output = Result<Value, String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         match self {
             PrimaryExp::BracketExp(exp) => exp.build_ir(program, context),
-            PrimaryExp::LVal(lval) => lval.build_ir(program, context),
+            PrimaryExp::LVal(lval) => {
+                let lval_val = lval.build_ir(program, context)?;
+                match lval_val {
+                    LValValue::Var(value) => {
+                        let load = new_value_builder(program, context).load(value);
+                        add_value(program, context, load)?;
+                        Ok(load)
+                    }
+                    LValValue::Const(value) => Ok(value),
+                }
+            }
             PrimaryExp::Number(num) => Ok(new_value_builder(program, context).integer(*num)),
         }
     }
@@ -223,24 +257,6 @@ impl IrGenerator for LOrExp {
                 add_value(program, context, value)?;
                 Ok(value)
             }
-        }
-    }
-}
-
-impl IrGenerator for LVal {
-    type Output = Result<Value, String>;
-    fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
-        if self.index.is_empty() {
-            let entry = context.symbol_tables.get_symbol(&self.ident).unwrap();
-            match entry {
-                SymbolTableEntry::Var(_, value) => Ok(*value),
-                SymbolTableEntry::Const(_, value) => {
-                    let val = *value;
-                    Ok(new_value_builder(program, context).integer(val))
-                }
-            }
-        } else {
-            todo!()
         }
     }
 }

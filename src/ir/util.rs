@@ -1,4 +1,5 @@
 use super::*;
+use koopa::ir::entities::ValueData;
 use koopa::ir::{builder::LocalBuilder, BasicBlock, Program, Value};
 use std::collections::HashMap;
 
@@ -26,6 +27,34 @@ pub fn add_value(
         Ok(_) => Ok(()),
         Err(value) => Err(format!("Failed to insert value: {:?}", value)),
     }
+}
+
+pub fn get_valuedata<'a>(
+    program: &'a Program,
+    context: &'a IrContext,
+    value: Value,
+) -> &'a ValueData {
+    let func_data = program.func(context.current_func.unwrap());
+    func_data.dfg().value(value)
+}
+pub fn set_value_name<'a>(
+    program: &'a mut Program,
+    context: &'a mut IrContext,
+    value: Value,
+    name: &str,
+) {
+    let func_data = program.func_mut(context.current_func.unwrap());
+    func_data
+        .dfg_mut()
+        .set_value_name(value, Some(name.to_string()));
+}
+pub fn get_valuedata_kind<'a>(
+    program: &'a Program,
+    context: &'a IrContext,
+    value: Value,
+) -> &'a TypeKind {
+    let func_data = program.func(context.current_func.unwrap());
+    func_data.dfg().value(value).ty().kind()
 }
 
 // Symbol Table

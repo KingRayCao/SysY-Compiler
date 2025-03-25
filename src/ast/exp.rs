@@ -4,6 +4,12 @@ pub enum Exp {
 }
 
 #[derive(Debug)]
+pub struct LVal {
+    pub ident: String,
+    pub index: Vec<Exp>,
+}
+
+#[derive(Debug)]
 pub enum PrimaryExp {
     BracketExp(Box<Exp>),
     LVal(Box<LVal>),
@@ -133,12 +139,6 @@ pub enum LAndExp {
 pub enum LOrExp {
     LAndExp(Box<LAndExp>),
     LOrExp(Box<LOrExp>, Box<LAndExp>),
-}
-
-#[derive(Debug)]
-pub struct LVal {
-    pub ident: String,
-    pub index: Vec<Exp>,
 }
 
 #[derive(Debug)]
