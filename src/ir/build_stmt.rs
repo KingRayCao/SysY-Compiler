@@ -9,7 +9,7 @@ impl IrGenerator for Stmt {
         match self {
             Stmt::ReturnStmt(exp) => {
                 let ret_val = exp.build_ir(program, context)?;
-                let ret = new_value(program, context).ret(Some(ret_val));
+                let ret = new_value_builder(program, context).ret(Some(ret_val));
                 add_value(program, context, ret)?;
                 Ok(())
             }

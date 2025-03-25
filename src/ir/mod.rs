@@ -1,9 +1,11 @@
 mod build_decl;
 mod build_expr;
 mod build_stmt;
+mod const_eval;
 mod util;
 use crate::ast::*;
-use koopa::ir::{BasicBlock, Function, Program, Value};
+use koopa::ir::{BasicBlock, Function, Program, TypeKind, Value};
+use util::*;
 
 pub trait IrGenerator {
     type Output;
@@ -12,6 +14,7 @@ pub trait IrGenerator {
 pub struct IrContext {
     current_func: Option<Function>,
     current_block: Option<BasicBlock>,
+    symbol_tables: SymbolTableStack,
 }
 impl IrGenerator for CompUnit {
     type Output = Result<(), String>;
@@ -26,7 +29,9 @@ pub fn compile(ast: &CompUnit) -> koopa::ir::Program {
     let mut context = IrContext {
         current_func: None,
         current_block: None,
+        symbol_tables: SymbolTableStack::new(),
     };
+    context.symbol_tables.push_table();
     ast.build_ir(&mut program, &mut context).unwrap();
     program
 }

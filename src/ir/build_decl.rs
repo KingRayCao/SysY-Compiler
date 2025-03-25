@@ -1,3 +1,4 @@
+use super::const_eval::*;
 use super::*;
 use crate::ast::decl::*;
 use koopa::ir::{builder::BasicBlockBuilder, FunctionData, Type, TypeKind};
@@ -40,7 +41,54 @@ impl IrGenerator for Block {
             .push_key_back(entry_block)
             .unwrap();
         context.current_block = Some(entry_block);
-        self.stmt.build_ir(program, context)?;
+        for item in self.block_items.iter() {
+            match item {
+                BlockItem::Decl(decl) => decl.build_ir(program, context)?,
+                BlockItem::Stmt(stmt) => stmt.build_ir(program, context)?,
+            }
+        }
         Ok(())
+    }
+}
+
+impl IrGenerator for Decl {
+    type Output = Result<(), String>;
+    fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
+        match self {
+            Decl::ConstDecl(decl) => decl.build_ir(program, context),
+        }
+    }
+}
+
+impl IrGenerator for ConstDecl {
+    type Output = Result<(), String>;
+    fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
+        match self.btype {
+            BType::Int => {
+                for def in self.const_defs.iter() {
+                    def.build_ir(program, context)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl IrGenerator for ConstDef {
+    type Output = Result<(), String>;
+    fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
+        if self.index.is_empty() {
+            match self.const_init_val.as_ref() {
+                ConstInitVal::ConstExp(exp) => {
+                    let const_init_val = exp.get_const_value(context).unwrap();
+                    context
+                        .symbol_tables
+                        .add_const(&self.ident, TypeKind::Int32, const_init_val);
+                }
+            }
+            Ok(())
+        } else {
+            todo!()
+        }
     }
 }

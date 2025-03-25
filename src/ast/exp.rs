@@ -5,9 +5,11 @@ pub enum Exp {
 
 #[derive(Debug)]
 pub enum PrimaryExp {
-    Exp(Box<Exp>),
+    BracketExp(Box<Exp>),
+    LVal(Box<LVal>),
     Number(i32),
 }
+
 #[derive(Debug)]
 pub enum UnaryExp {
     UnaryExp(UnaryOp, Box<UnaryExp>),
@@ -131,4 +133,15 @@ pub enum LAndExp {
 pub enum LOrExp {
     LAndExp(Box<LAndExp>),
     LOrExp(Box<LOrExp>, Box<LAndExp>),
+}
+
+#[derive(Debug)]
+pub struct LVal {
+    pub ident: String,
+    pub index: Vec<Exp>,
+}
+
+#[derive(Debug)]
+pub struct ConstExp {
+    pub exp: Box<Exp>,
 }

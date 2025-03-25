@@ -17,8 +17,9 @@ impl IrGenerator for PrimaryExp {
     type Output = Result<Value, String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         match self {
-            PrimaryExp::Exp(exp) => exp.build_ir(program, context),
-            PrimaryExp::Number(num) => Ok(new_value(program, context).integer(*num)),
+            PrimaryExp::BracketExp(exp) => exp.build_ir(program, context),
+            PrimaryExp::LVal(lval) => lval.build_ir(program, context),
+            PrimaryExp::Number(num) => Ok(new_value_builder(program, context).integer(*num)),
         }
     }
 }
@@ -32,16 +33,22 @@ impl IrGenerator for UnaryExp {
                 let value = match op {
                     UnaryOp::Plus => exp_val,
                     UnaryOp::Minus => {
-                        let value_0 = new_value(program, context).integer(0);
-                        let neg_val =
-                            new_value(program, context).binary(BinaryOp::Sub, value_0, exp_val);
+                        let value_0 = new_value_builder(program, context).integer(0);
+                        let neg_val = new_value_builder(program, context).binary(
+                            BinaryOp::Sub,
+                            value_0,
+                            exp_val,
+                        );
                         add_value(program, context, neg_val)?;
                         neg_val
                     }
                     UnaryOp::Not => {
-                        let value_0 = new_value(program, context).integer(0);
-                        let not_val =
-                            new_value(program, context).binary(BinaryOp::Eq, value_0, exp_val);
+                        let value_0 = new_value_builder(program, context).integer(0);
+                        let not_val = new_value_builder(program, context).binary(
+                            BinaryOp::Eq,
+                            value_0,
+                            exp_val,
+                        );
                         add_value(program, context, not_val)?;
                         not_val
                     }
@@ -62,15 +69,21 @@ impl IrGenerator for MulExp {
                 let exp1_val = exp1.build_ir(program, context)?;
                 let exp2_val = exp2.build_ir(program, context)?;
                 let value = match op {
-                    MulOp::Mul => {
-                        new_value(program, context).binary(BinaryOp::Mul, exp1_val, exp2_val)
-                    }
-                    MulOp::Div => {
-                        new_value(program, context).binary(BinaryOp::Div, exp1_val, exp2_val)
-                    }
-                    MulOp::Mod => {
-                        new_value(program, context).binary(BinaryOp::Mod, exp1_val, exp2_val)
-                    }
+                    MulOp::Mul => new_value_builder(program, context).binary(
+                        BinaryOp::Mul,
+                        exp1_val,
+                        exp2_val,
+                    ),
+                    MulOp::Div => new_value_builder(program, context).binary(
+                        BinaryOp::Div,
+                        exp1_val,
+                        exp2_val,
+                    ),
+                    MulOp::Mod => new_value_builder(program, context).binary(
+                        BinaryOp::Mod,
+                        exp1_val,
+                        exp2_val,
+                    ),
                 };
                 add_value(program, context, value)?;
                 Ok(value)
@@ -88,12 +101,16 @@ impl IrGenerator for AddExp {
                 let exp1_val = exp1.build_ir(program, context)?;
                 let exp2_val = exp2.build_ir(program, context)?;
                 let value = match op {
-                    AddOp::Add => {
-                        new_value(program, context).binary(BinaryOp::Add, exp1_val, exp2_val)
-                    }
-                    AddOp::Sub => {
-                        new_value(program, context).binary(BinaryOp::Sub, exp1_val, exp2_val)
-                    }
+                    AddOp::Add => new_value_builder(program, context).binary(
+                        BinaryOp::Add,
+                        exp1_val,
+                        exp2_val,
+                    ),
+                    AddOp::Sub => new_value_builder(program, context).binary(
+                        BinaryOp::Sub,
+                        exp1_val,
+                        exp2_val,
+                    ),
                 };
                 add_value(program, context, value)?;
                 Ok(value)
@@ -112,16 +129,16 @@ impl IrGenerator for RelExp {
                 let exp2_val = exp2.build_ir(program, context)?;
                 let value = match op {
                     RelOp::Lt => {
-                        new_value(program, context).binary(BinaryOp::Lt, exp1_val, exp2_val)
+                        new_value_builder(program, context).binary(BinaryOp::Lt, exp1_val, exp2_val)
                     }
                     RelOp::Le => {
-                        new_value(program, context).binary(BinaryOp::Le, exp1_val, exp2_val)
+                        new_value_builder(program, context).binary(BinaryOp::Le, exp1_val, exp2_val)
                     }
                     RelOp::Gt => {
-                        new_value(program, context).binary(BinaryOp::Gt, exp1_val, exp2_val)
+                        new_value_builder(program, context).binary(BinaryOp::Gt, exp1_val, exp2_val)
                     }
                     RelOp::Ge => {
-                        new_value(program, context).binary(BinaryOp::Ge, exp1_val, exp2_val)
+                        new_value_builder(program, context).binary(BinaryOp::Ge, exp1_val, exp2_val)
                     }
                 };
                 add_value(program, context, value)?;
@@ -141,11 +158,13 @@ impl IrGenerator for EqExp {
                 let exp2_val = exp2.build_ir(program, context)?;
                 let value = match op {
                     EqOp::Eq => {
-                        new_value(program, context).binary(BinaryOp::Eq, exp1_val, exp2_val)
+                        new_value_builder(program, context).binary(BinaryOp::Eq, exp1_val, exp2_val)
                     }
-                    EqOp::Ne => {
-                        new_value(program, context).binary(BinaryOp::NotEq, exp1_val, exp2_val)
-                    }
+                    EqOp::Ne => new_value_builder(program, context).binary(
+                        BinaryOp::NotEq,
+                        exp1_val,
+                        exp2_val,
+                    ),
                 };
                 add_value(program, context, value)?;
                 Ok(value)
@@ -162,14 +181,14 @@ impl IrGenerator for LAndExp {
             LAndExp::LAndExp(exp1, exp2) => {
                 let exp1_val = exp1.build_ir(program, context)?;
                 let exp2_val = exp2.build_ir(program, context)?;
-                let val_0 = new_value(program, context).integer(0);
+                let val_0 = new_value_builder(program, context).integer(0);
                 let exp1_not_0_val =
-                    new_value(program, context).binary(BinaryOp::NotEq, exp1_val, val_0);
+                    new_value_builder(program, context).binary(BinaryOp::NotEq, exp1_val, val_0);
                 add_value(program, context, exp1_not_0_val)?;
                 let exp2_not_0_val =
-                    new_value(program, context).binary(BinaryOp::NotEq, exp2_val, val_0);
+                    new_value_builder(program, context).binary(BinaryOp::NotEq, exp2_val, val_0);
                 add_value(program, context, exp2_not_0_val)?;
-                let value = new_value(program, context).binary(
+                let value = new_value_builder(program, context).binary(
                     BinaryOp::And,
                     exp1_not_0_val,
                     exp2_not_0_val,
@@ -189,14 +208,14 @@ impl IrGenerator for LOrExp {
             LOrExp::LOrExp(exp1, exp2) => {
                 let exp1_val = exp1.build_ir(program, context)?;
                 let exp2_val = exp2.build_ir(program, context)?;
-                let val_0 = new_value(program, context).integer(0);
+                let val_0 = new_value_builder(program, context).integer(0);
                 let exp1_not_0_val =
-                    new_value(program, context).binary(BinaryOp::NotEq, exp1_val, val_0);
+                    new_value_builder(program, context).binary(BinaryOp::NotEq, exp1_val, val_0);
                 add_value(program, context, exp1_not_0_val)?;
                 let exp2_not_0_val =
-                    new_value(program, context).binary(BinaryOp::NotEq, exp2_val, val_0);
+                    new_value_builder(program, context).binary(BinaryOp::NotEq, exp2_val, val_0);
                 add_value(program, context, exp2_not_0_val)?;
-                let value = new_value(program, context).binary(
+                let value = new_value_builder(program, context).binary(
                     BinaryOp::Or,
                     exp1_not_0_val,
                     exp2_not_0_val,
@@ -204,6 +223,24 @@ impl IrGenerator for LOrExp {
                 add_value(program, context, value)?;
                 Ok(value)
             }
+        }
+    }
+}
+
+impl IrGenerator for LVal {
+    type Output = Result<Value, String>;
+    fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
+        if self.index.is_empty() {
+            let entry = context.symbol_tables.get_symbol(&self.ident).unwrap();
+            match entry {
+                SymbolTableEntry::Var(_, value) => Ok(*value),
+                SymbolTableEntry::Const(_, value) => {
+                    let val = *value;
+                    Ok(new_value_builder(program, context).integer(val))
+                }
+            }
+        } else {
+            todo!()
         }
     }
 }

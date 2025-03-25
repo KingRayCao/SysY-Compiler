@@ -1,3 +1,4 @@
+use super::exp::*;
 use super::stmt::*;
 use koopa::ir::TypeKind;
 #[derive(Debug)]
@@ -22,6 +23,40 @@ impl ToString for FuncType {
 }
 
 #[derive(Debug)]
+pub enum Decl {
+    ConstDecl(Box<ConstDecl>),
+}
+
+#[derive(Debug)]
+pub struct ConstDecl {
+    pub btype: BType,
+    pub const_defs: Vec<ConstDef>,
+}
+
+#[derive(Debug)]
+pub struct ConstDef {
+    pub ident: String,
+    pub index: Vec<ConstExp>,
+    pub const_init_val: Box<ConstInitVal>,
+}
+
+#[derive(Debug)]
+pub enum ConstInitVal {
+    ConstExp(Box<ConstExp>),
+}
+
+#[derive(Debug)]
+pub enum BType {
+    Int,
+}
+
+#[derive(Debug)]
 pub struct Block {
-    pub stmt: Stmt,
+    pub block_items: Vec<BlockItem>,
+}
+
+#[derive(Debug)]
+pub enum BlockItem {
+    Decl(Box<Decl>),
+    Stmt(Box<Stmt>),
 }

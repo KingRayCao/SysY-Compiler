@@ -15,6 +15,23 @@ match {
   _
 }
 
+// Macros
+// 逗号分隔的列表
+Comma<T>: Vec<T> = {
+    <mut v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
+};
+// 表达式
+Tier<Op,NextTier>: Box<Expr> = {
+    Tier<Op,NextTier> Op NextTier => Box::new(Expr::Op(<>)),
+    NextTier
+};
+
 pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit { <> };
 
 FuncDef: FuncDef = {
@@ -25,8 +42,6 @@ FuncDef: FuncDef = {
 
 FuncType: FuncType = "int" => FuncType::Int;
 
-Block: Block = "{" <stmt: Stmt> "}" => Block { <> };
-
 Stmt: Stmt ={
   "return" <exp: Exp> ";" => Stmt::ReturnStmt (Box::new(exp)),
 } 
@@ -34,8 +49,9 @@ Stmt: Stmt ={
 Exp: Exp = <l_or_exp: LOrExp> => Exp::LOrExp (Box::new(l_or_exp));
 
 PrimaryExp: PrimaryExp = {
-  "(" <exp: Exp> ")" => PrimaryExp::Exp (Box::new(exp)),
-  <num: Number> => PrimaryExp::Number ( <> ),
+  "(" <exp: Exp> ")" => PrimaryExp::BracketExp (Box::new(exp)),
+  <lval: LVal> => PrimaryExp::LVal (Box::new(lval)),
+  <number: Number> => PrimaryExp::Number ( <> ),
 }
 
 UnaryExp: UnaryExp = {
@@ -109,6 +125,43 @@ Number: i32 = <num: IntConst> => <>;
 // 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
 // 关于尖括号到底代表什么, 请 RTFM
 Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
+
+Decl: Decl = {
+  <const_decl: ConstDecl> => Decl::ConstDecl (Box::new(const_decl)),
+}
+
+ConstDecl: ConstDecl = {
+  "const" <btype: BType> <const_defs: ConstDefs> ";" => ConstDecl { <> },
+}
+
+BType: BType = "int" => BType::Int;
+
+ConstDefs = Comma<ConstDef>;
+
+
+ConstDef: ConstDef = {
+  <ident: Ident> <index: ("[" <ConstExp> "]")*> "=" <const_init_val: ConstInitVal> => ConstDef { ident: ident, index: index, const_init_val: Box::new(const_init_val) },
+}
+
+ConstInitVal: ConstInitVal = {
+  <const_exp: ConstExp> => ConstInitVal::ConstExp (Box::new(const_exp)),
+}
+
+Block: Block = "{" <block_items: BlockItem*> "}" => Block { <> };
+
+BlockItem: BlockItem = {
+  <decl: Decl> => BlockItem::Decl (Box::new(decl)),
+  <stmt: Stmt> => BlockItem::Stmt (Box::new(stmt)),
+}
+
+LVal: LVal = {
+  <ident: Ident> <index: ("[" <Exp> "]")*> => LVal { ident: ident, index: index },
+}
+
+
+ConstExp: ConstExp = {
+  <exp: Exp> => ConstExp { exp: Box::new(exp) },
+}
 
 // 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
 IntConst: i32 = {
