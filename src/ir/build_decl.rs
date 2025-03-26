@@ -72,6 +72,7 @@ impl IrGenerator for VarDef {
                 if index.is_empty() {
                     let alloc = new_value_builder(program, context).alloc(Type::get_i32());
                     add_value(program, context, alloc).unwrap();
+                    set_value_name(program, context, alloc, format!("@{}", ident).as_str());
                     context
                         .symbol_tables
                         .add_var(&ident, TypeKind::Int32, alloc);
@@ -88,6 +89,7 @@ impl IrGenerator for VarDef {
                 if index.is_empty() {
                     let alloc = new_value_builder(program, context).alloc(Type::get_i32());
                     add_value(program, context, alloc).unwrap();
+                    set_value_name(program, context, alloc, format!("@{}", ident).as_str());
                     context
                         .symbol_tables
                         .add_var(&ident, TypeKind::Int32, alloc);
