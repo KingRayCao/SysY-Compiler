@@ -67,8 +67,7 @@ pub fn value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
             let (rhs_load_asm, rhs_reg) = func_ctx.load_value_to_reg(rhs_value);
             asm += &lhs_load_asm;
             asm += &rhs_load_asm;
-            let offset = func_ctx.current_offset as i32;
-            let dest_reg = func_ctx.reg_value_table.alloc_temp_reg();
+            let dest_reg = func_ctx.reg_value_table.alloc_value(value);
             match op {
                 BinaryOp::Add => {
                     asm += &riscv_bin_op("add", dest_reg, lhs_reg, rhs_reg);
@@ -120,12 +119,8 @@ pub fn value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
                 }
                 _ => todo!(),
             };
-            asm += &riscv_sw(dest_reg, "sp", offset, func_ctx);
-            func_ctx.value_addr.insert(value, offset);
-            func_ctx.current_offset += value_data.ty().size();
             func_ctx.reg_value_table.free_reg(lhs_reg);
             func_ctx.reg_value_table.free_reg(rhs_reg);
-            func_ctx.reg_value_table.free_reg(dest_reg);
             asm
         }
         ValueKind::Store(store) => {

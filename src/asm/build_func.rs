@@ -80,7 +80,7 @@ impl<'a> FuncContext<'a> {
             ValueKind::Alloc(_) => 4,
             ValueKind::Load(_) => 0,
             ValueKind::Integer(_) => 0,
-            ValueKind::Binary(bin) => valuedata.ty().size(),
+            ValueKind::Binary(bin) => 0,
             ValueKind::Store(store) => valuedata.ty().size(),
             _ => valuedata.ty().size(),
         }
