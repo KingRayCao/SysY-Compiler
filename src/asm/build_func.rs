@@ -3,7 +3,7 @@ use super::gen_riscv::*;
 use super::util::RegValueTable;
 use super::util::*;
 use super::GenerateAsm;
-use super::{Reg, ASM};
+use super::{Asm, Reg};
 use koopa::ir::entities::ValueData;
 use koopa::ir::{FunctionData, Value, ValueKind};
 use std::collections::HashMap;
@@ -18,19 +18,29 @@ pub struct FuncContext<'a> {
 }
 
 impl GenerateAsm for FunctionData {
-    fn to_asm(&self) -> ASM {
+    fn to_asm(&self) -> Asm {
         let mut asm = String::new();
 
         let mut func_context = FuncContext::new(self);
         // prologue
         asm += &format!("{}:\n", &self.name()[1..]);
-        asm += &riscv_bin_op_imm("add", "sp", "sp", -(func_context.stack_size as i32));
+        asm += &riscv_bin_op_imm(
+            "add",
+            "sp",
+            "sp",
+            -(func_context.stack_size as i32),
+            &mut func_context,
+        );
         // body
         for (&bb, node) in self.layout().bbs() {
             for &inst in node.insts().keys() {
+                println!("\n\n");
                 asm += &value_to_asm(inst, &mut func_context);
+                // assert!(func_context.reg_all_free());
             }
         }
+        assert!(func_context.reg_all_free());
+        assert!((func_context.current_offset + 15) / 16 * 16 == func_context.stack_size);
         return asm;
     }
 }
@@ -70,19 +80,13 @@ impl<'a> FuncContext<'a> {
             ValueKind::Alloc(_) => 4,
             ValueKind::Load(_) => 0,
             ValueKind::Integer(_) => 0,
-            ValueKind::Binary(bin) => {
-                valuedata.ty().size()
-                    + Self::get_value_stack_size(func_data, bin.lhs())
-                    + Self::get_value_stack_size(func_data, bin.rhs())
-            }
-            ValueKind::Store(store) => {
-                valuedata.ty().size() + Self::get_value_stack_size(func_data, store.value())
-            }
+            ValueKind::Binary(bin) => valuedata.ty().size(),
+            ValueKind::Store(store) => valuedata.ty().size(),
             _ => valuedata.ty().size(),
         }
     }
 
-    pub fn load_value_to_reg(&mut self, value: Value) -> (ASM, Reg) {
+    pub fn load_value_to_reg(&mut self, value: Value) -> (Asm, Reg) {
         match self.reg_value_table.get_reg(value) {
             Some(reg) => {
                 // already in reg
@@ -91,7 +95,7 @@ impl<'a> FuncContext<'a> {
             _ => {
                 // not in reg
                 let reg = self.reg_value_table.alloc_value(value);
-                (riscv_lw(reg, "sp", self.value_addr[&value]), reg)
+                (riscv_lw(reg, "sp", self.value_addr[&value], self), reg)
             }
         }
     }
@@ -101,5 +105,8 @@ impl<'a> FuncContext<'a> {
         let value_data = self.func_data.dfg().value(value);
         println!("value: {:?}", value);
         print_value_data(value_data);
+    }
+    pub fn reg_all_free(&mut self) -> bool {
+        self.reg_value_table.reg_all_free()
     }
 }

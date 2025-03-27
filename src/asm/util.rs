@@ -1,6 +1,6 @@
 use super::build_func::FuncContext;
 use super::gen_riscv::*;
-use super::{Reg, ASM};
+use super::{Asm, Reg};
 use koopa::ir::entities::ValueData;
 use koopa::ir::{FunctionData, Value, ValueKind};
 use std::collections::HashMap;
@@ -51,6 +51,17 @@ impl RegValueTable {
         self.value_reg.get(&value).cloned()
     }
 
+    pub fn alloc_reg(&mut self, reg: Reg, value: Option<Value>) {
+        if self.reg_is_free(reg) {
+            *self.reg_value.get_mut(&reg).unwrap() = value.map(|v| Some(v));
+            if let Some(value) = value {
+                self.value_reg.insert(value, reg);
+            }
+        } else {
+            panic!("register {} is not free", reg);
+        }
+    }
+
     pub fn alloc_value(&mut self, value: Value) -> Reg {
         for (reg, v) in self.reg_value.iter_mut() {
             if v.is_none() {
@@ -95,6 +106,15 @@ impl RegValueTable {
             }
         }
         panic!("no available register");
+    }
+
+    pub fn reg_all_free(&mut self) -> bool {
+        for (_, v) in self.reg_value.iter_mut() {
+            if v.is_some() {
+                return false;
+            }
+        }
+        true
     }
 }
 

@@ -13,7 +13,7 @@ pub trait GenerateAsm {
     fn to_asm(&self) -> String;
 }
 
-pub type ASM = String;
+pub type Asm = String;
 
 pub type Reg = &'static str;
 
