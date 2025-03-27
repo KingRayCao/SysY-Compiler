@@ -1,3 +1,8 @@
+#![cfg_attr(
+    debug_assertions,
+    allow(dead_code, unused_imports, unused_variables, non_snake_case)
+)]
+
 use crate::asm::*;
 use crate::ir::*;
 use lalrpop_util::lalrpop_mod;

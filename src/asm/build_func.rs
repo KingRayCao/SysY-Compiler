@@ -34,9 +34,7 @@ impl GenerateAsm for FunctionData {
         // body
         for (&bb, node) in self.layout().bbs() {
             for &inst in node.insts().keys() {
-                println!("\n\n");
                 asm += &value_to_asm(inst, &mut func_context);
-                // assert!(func_context.reg_all_free());
             }
         }
         assert!(func_context.reg_all_free());

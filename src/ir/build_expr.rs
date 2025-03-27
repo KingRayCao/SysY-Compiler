@@ -22,7 +22,8 @@ impl IrGenerator for LVal {
     type Output = Result<LValValue, String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         if self.index.is_empty() {
-            let entry = context.symbol_tables.get_symbol(&self.ident).unwrap();
+            let (entry, _) = context.symbol_tables.get_symbol(&self.ident);
+            let entry = entry.unwrap();
             match entry {
                 SymbolTableEntry::Var(_, value) => Ok(LValValue::Var(*value)),
                 SymbolTableEntry::Const(_, value) => {

@@ -72,7 +72,12 @@ impl IrGenerator for VarDef {
                 if index.is_empty() {
                     let alloc = new_value_builder(program, context).alloc(Type::get_i32());
                     add_value(program, context, alloc).unwrap();
-                    set_value_name(program, context, alloc, format!("@{}", ident).as_str());
+                    set_value_name(
+                        program,
+                        context,
+                        alloc,
+                        format!("@{}_{}", ident, context.symbol_tables.get_depth()).as_str(),
+                    );
                     context
                         .symbol_tables
                         .add_var(&ident, TypeKind::Int32, alloc);
@@ -89,7 +94,12 @@ impl IrGenerator for VarDef {
                 if index.is_empty() {
                     let alloc = new_value_builder(program, context).alloc(Type::get_i32());
                     add_value(program, context, alloc).unwrap();
-                    set_value_name(program, context, alloc, format!("@{}", ident).as_str());
+                    set_value_name(
+                        program,
+                        context,
+                        alloc,
+                        format!("@{}_{}", ident, context.symbol_tables.get_depth()).as_str(),
+                    );
                     context
                         .symbol_tables
                         .add_var(&ident, TypeKind::Int32, alloc);
@@ -130,7 +140,19 @@ impl IrGenerator for FuncDef {
         );
         let func = program.new_func(func_data);
         context.current_func = Some(func);
-        // create blocks
+        // create entry block
+        let func_data = program.func_mut(func);
+        let entry_block = func_data
+            .dfg_mut()
+            .new_bb()
+            .basic_block(Some("%entry".to_string()));
+        func_data
+            .layout_mut()
+            .bbs_mut()
+            .push_key_back(entry_block)
+            .unwrap();
+        context.current_block = Some(entry_block);
+        // create block
         self.block.build_ir(program, context)?;
         Ok(())
     }
@@ -141,17 +163,7 @@ impl IrGenerator for FuncDef {
 impl IrGenerator for Block {
     type Output = Result<(), String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
-        let func_data = program.func_mut(context.current_func.unwrap());
-        let entry_block = func_data
-            .dfg_mut()
-            .new_bb()
-            .basic_block(Some("%entry".into()));
-        func_data
-            .layout_mut()
-            .bbs_mut()
-            .push_key_back(entry_block)
-            .unwrap();
-        context.current_block = Some(entry_block);
+        context.symbol_tables.push_table();
         for item in self.block_items.iter() {
             match item {
                 BlockItem::Decl(decl) => decl.build_ir(program, context)?,
@@ -163,6 +175,7 @@ impl IrGenerator for Block {
                 }
             }
         }
+        context.symbol_tables.pop_table();
         Ok(())
     }
 }

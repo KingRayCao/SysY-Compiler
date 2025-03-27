@@ -142,7 +142,7 @@ impl ConstEval for LOrExp {
 
 impl ConstEval for LVal {
     fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
-        let symbol = context.symbol_tables.get_symbol(&self.ident);
+        let (symbol, _) = context.symbol_tables.get_symbol(&self.ident);
         if let Some(symbol) = symbol {
             match symbol {
                 SymbolTableEntry::Const(_, value) => Ok(*value),

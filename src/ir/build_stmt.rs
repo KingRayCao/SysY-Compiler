@@ -20,12 +20,23 @@ impl IrGenerator for Stmt {
                     LValValue::Const(_) => Err("Assign to constant".to_string()),
                 }
             }
+            Stmt::ExpStmt(exp) => {
+                if let Some(exp) = exp.as_ref() {
+                    let exp_val = exp.build_ir(program, context)?;
+                }
+                Ok(())
+            }
+            Stmt::BlockStmt(block) => {
+                block.build_ir(program, context)?;
+                Ok(())
+            }
             Stmt::ReturnStmt(exp) => {
                 let ret_val = exp.build_ir(program, context)?;
                 let ret = new_value_builder(program, context).ret(Some(ret_val));
                 add_value(program, context, ret)?;
                 Ok(())
             }
+            _ => Err("Unsupported statement".to_string()),
         }
     }
 }

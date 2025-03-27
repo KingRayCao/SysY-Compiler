@@ -8,12 +8,9 @@ pub fn value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
     let func_data = func_ctx.func_data;
     let value_data = func_data.dfg().value(value);
     let mut asm = String::new();
-    func_ctx.print_value(value);
+    // func_ctx.print_value(value);
     match value_data.kind() {
         ValueKind::Integer(int) => {
-            // let int_reg = func_ctx.reg_value_table.alloc_value(value);
-            // asm = format!("  li {}, {}\n", int_reg, int.value());
-            // asm
             unreachable!()
         }
         ValueKind::Return(ret) => {
@@ -53,6 +50,9 @@ pub fn value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
             let load_value_addr = func_ctx.value_addr[&load_value];
             let load_reg = func_ctx.reg_value_table.alloc_value(value);
             asm += &riscv_lw(load_reg, "sp", load_value_addr, func_ctx);
+            if value_data.used_by().is_empty() {
+                func_ctx.reg_value_table.free_reg(load_reg);
+            }
             asm
         }
         ValueKind::Binary(bin) => {
@@ -121,6 +121,9 @@ pub fn value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
             };
             func_ctx.reg_value_table.free_reg(lhs_reg);
             func_ctx.reg_value_table.free_reg(rhs_reg);
+            if value_data.used_by().is_empty() {
+                func_ctx.reg_value_table.free_reg(dest_reg);
+            }
             asm
         }
         ValueKind::Store(store) => {
@@ -144,7 +147,7 @@ pub fn value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
 pub fn child_value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
     let func_data = func_ctx.func_data;
     let value_data = func_data.dfg().value(value);
-    func_ctx.print_value(value);
+    // func_ctx.print_value(value);
     match value_data.kind() {
         ValueKind::Integer(int) => {
             let int_reg = func_ctx.reg_value_table.alloc_value(value);

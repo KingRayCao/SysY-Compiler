@@ -31,7 +31,6 @@ pub fn compile(ast: &CompUnit) -> koopa::ir::Program {
         current_block: None,
         symbol_tables: SymbolTableStack::new(),
     };
-    context.symbol_tables.push_table();
     ast.build_ir(&mut program, &mut context).unwrap();
     program
 }

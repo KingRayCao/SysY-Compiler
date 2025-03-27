@@ -77,13 +77,13 @@ impl SymbolTableStack {
     pub fn pop_table(&mut self) {
         self.tables.pop();
     }
-    pub fn get_symbol(&self, name: &str) -> Option<&SymbolTableEntry> {
-        for table in self.tables.iter().rev() {
+    pub fn get_symbol(&self, name: &str) -> (Option<&SymbolTableEntry>, usize) {
+        for (i, table) in self.tables.iter().rev().enumerate() {
             if let Some(entry) = table.get(name) {
-                return Some(entry);
+                return (Some(entry), self.tables.len() - i);
             }
         }
-        None
+        (None, 0)
     }
     fn add_symbol(&mut self, name: &str, entry: SymbolTableEntry) {
         self.tables
@@ -96,5 +96,8 @@ impl SymbolTableStack {
     }
     pub fn add_const(&mut self, name: &str, tk: TypeKind, value: i32) {
         self.add_symbol(name, SymbolTableEntry::Const(tk, value));
+    }
+    pub fn get_depth(&self) -> usize {
+        self.tables.len()
     }
 }
