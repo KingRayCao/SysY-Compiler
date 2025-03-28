@@ -57,9 +57,21 @@ pub fn insert_bb<'a>(
 }
 
 pub fn change_current_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, bb: BasicBlock) {
-    // 清空prev_is_ret
     context.current_bb = Some(bb);
-    context.prev_bb_end = false;
+}
+
+pub fn get_bb_last_value<'a>(
+    program: &'a mut Program,
+    context: &'a mut IrContext,
+) -> Option<Value> {
+    let func_data = program.func_mut(context.current_func.unwrap());
+    func_data
+        .layout_mut()
+        .bb_mut(context.current_bb.unwrap())
+        .insts_mut()
+        .keys()
+        .last()
+        .map(|v| v.clone())
 }
 
 pub fn add_value(
@@ -67,22 +79,19 @@ pub fn add_value(
     context: &mut IrContext,
     value: Value,
 ) -> Result<(), String> {
-    let bb = if context.prev_bb_end {
-        let bb = create_bb(program, context, "%new_bb");
-        change_current_bb(program, context, bb);
-        bb
-    } else {
-        context.current_bb.unwrap()
-    };
+    let bb = context.current_bb.unwrap();
+    let bb_last_value = get_bb_last_value(program, context);
+    if let Some(bb_last_value) = bb_last_value {
+        if let ValueKind::Return(_) = get_valuekind(program, context, bb_last_value) {
+            return Ok(());
+        }
+    }
     let func_data = program.func_mut(context.current_func.unwrap());
     let insert_ok = func_data
         .layout_mut()
         .bb_mut(bb)
         .insts_mut()
         .push_key_back(value);
-    if let ValueKind::Return(_) = get_valuekind(program, context, value) {
-        context.prev_bb_end = true;
-    }
     match insert_ok {
         Ok(_) => Ok(()),
         Err(value) => Err(format!("Failed to insert value: {:?}", value)),

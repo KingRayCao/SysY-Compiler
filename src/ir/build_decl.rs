@@ -2,8 +2,9 @@ use super::const_eval::*;
 use super::*;
 use crate::ast::decl::*;
 use crate::ast::stmt::*;
+use koopa::ir::builder::ValueBuilder;
 use koopa::ir::builder::{BasicBlockBuilder, LocalInstBuilder};
-use koopa::ir::{FunctionData, Type, TypeKind};
+use koopa::ir::{FunctionData, Type, TypeKind, ValueKind};
 
 // ============= Declaration =============
 
@@ -146,6 +147,33 @@ impl IrGenerator for FuncDef {
         // compile block
         // 注意 BasicBlock和Block的区别
         self.block.build_ir(program, context)?;
+        // 检查目前Block的最后一个语句是否为ret
+        let bb_last_value = get_bb_last_value(program, context);
+        let mut need_ret = false;
+        if let Some(bb_last_value) = bb_last_value {
+            if !matches!(
+                get_valuekind(program, context, bb_last_value),
+                ValueKind::Return(_)
+            ) {
+                need_ret = true;
+            }
+        } else {
+            need_ret = true;
+        }
+        if need_ret {
+            match self.func_type.to_koopa_kind() {
+                TypeKind::Unit => {
+                    let ret = new_value_builder(program, context).ret(None);
+                    add_value(program, context, ret).unwrap();
+                }
+                TypeKind::Int32 => {
+                    let val_0 = new_value_builder(program, context).integer(0);
+                    let ret = new_value_builder(program, context).ret(Some(val_0));
+                    add_value(program, context, ret).unwrap();
+                }
+                _ => todo!(),
+            }
+        }
         Ok(())
     }
 }
