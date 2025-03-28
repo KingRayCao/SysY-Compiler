@@ -2,7 +2,7 @@ use super::util::*;
 use super::*;
 use crate::ast::exp::*;
 use koopa::ir::builder::{LocalInstBuilder, ValueBuilder};
-use koopa::ir::{BinaryOp, Value};
+use koopa::ir::{BinaryOp, Type, Value};
 
 impl IrGenerator for Exp {
     type Output = Result<Value, String>;
@@ -213,23 +213,42 @@ impl IrGenerator for LAndExp {
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         match self {
             LAndExp::EqExp(exp) => exp.build_ir(program, context),
-            LAndExp::LAndExp(exp1, exp2) => {
-                let exp1_val = exp1.build_ir(program, context)?;
-                let exp2_val = exp2.build_ir(program, context)?;
+            LAndExp::LAndExp(lhs, rhs) => {
+                /*
+                   int result = 0;
+                   if (exp1 != 0) {
+                       result = exp2 != 0;
+                   }
+                */
+                let res_val = new_value_builder(program, context).alloc(Type::get_i32());
+                add_value(program, context, res_val)?;
                 let val_0 = new_value_builder(program, context).integer(0);
-                let exp1_not_0_val =
-                    new_value_builder(program, context).binary(BinaryOp::NotEq, exp1_val, val_0);
-                add_value(program, context, exp1_not_0_val)?;
-                let exp2_not_0_val =
-                    new_value_builder(program, context).binary(BinaryOp::NotEq, exp2_val, val_0);
-                add_value(program, context, exp2_not_0_val)?;
-                let value = new_value_builder(program, context).binary(
-                    BinaryOp::And,
-                    exp1_not_0_val,
-                    exp2_not_0_val,
-                );
-                add_value(program, context, value)?;
-                Ok(value)
+                let res_store_0 = new_value_builder(program, context).store(val_0, res_val);
+                add_value(program, context, res_store_0)?;
+                let lhs_val = lhs.build_ir(program, context)?;
+                let lhs_true_bb = new_bb(program, context, "%lhs_true");
+                let lhs_false_bb = new_bb(program, context, "%lhs_false");
+                let and_stmt_val =
+                    new_value_builder(program, context).branch(lhs_val, lhs_true_bb, lhs_false_bb);
+                add_value(program, context, and_stmt_val)?;
+                // build lhs_true_bb
+                let lhs_true_bb = insert_bb(program, context, lhs_true_bb);
+                change_current_bb(program, context, lhs_true_bb);
+                let rhs_val = rhs.build_ir(program, context)?;
+                let rhs_not_0_val =
+                    new_value_builder(program, context).binary(BinaryOp::NotEq, rhs_val, val_0);
+                add_value(program, context, rhs_not_0_val)?;
+                let res_store_rhs =
+                    new_value_builder(program, context).store(rhs_not_0_val, res_val);
+                add_value(program, context, res_store_rhs)?;
+                let lhs_true_jump = new_value_builder(program, context).jump(lhs_false_bb);
+                add_value(program, context, lhs_true_jump)?;
+                // build lhs_false_bb
+                let lhs_false_bb = insert_bb(program, context, lhs_false_bb);
+                change_current_bb(program, context, lhs_false_bb);
+                let load_val = new_value_builder(program, context).load(res_val);
+                add_value(program, context, load_val)?;
+                Ok(load_val)
             }
         }
     }
@@ -240,23 +259,43 @@ impl IrGenerator for LOrExp {
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         match self {
             LOrExp::LAndExp(exp) => exp.build_ir(program, context),
-            LOrExp::LOrExp(exp1, exp2) => {
-                let exp1_val = exp1.build_ir(program, context)?;
-                let exp2_val = exp2.build_ir(program, context)?;
+            LOrExp::LOrExp(lhs, rhs) => {
+                /*
+                   int result = 1;
+                   if (lhs == 0) {
+                       result = rhs != 0;
+                   }
+                */
+                let res_val = new_value_builder(program, context).alloc(Type::get_i32());
+                add_value(program, context, res_val)?;
+                let val_1 = new_value_builder(program, context).integer(1);
                 let val_0 = new_value_builder(program, context).integer(0);
-                let exp1_not_0_val =
-                    new_value_builder(program, context).binary(BinaryOp::NotEq, exp1_val, val_0);
-                add_value(program, context, exp1_not_0_val)?;
-                let exp2_not_0_val =
-                    new_value_builder(program, context).binary(BinaryOp::NotEq, exp2_val, val_0);
-                add_value(program, context, exp2_not_0_val)?;
-                let value = new_value_builder(program, context).binary(
-                    BinaryOp::Or,
-                    exp1_not_0_val,
-                    exp2_not_0_val,
-                );
-                add_value(program, context, value)?;
-                Ok(value)
+                let res_store_1 = new_value_builder(program, context).store(val_1, res_val);
+                add_value(program, context, res_store_1)?;
+                let lhs_val = lhs.build_ir(program, context)?;
+                let lhs_false_bb = new_bb(program, context, "%lhs_false");
+                let lhs_true_bb = new_bb(program, context, "%lhs_true");
+                let or_stmt_val =
+                    new_value_builder(program, context).branch(lhs_val, lhs_true_bb, lhs_false_bb);
+                add_value(program, context, or_stmt_val)?;
+                // build lhs_false_bb
+                let lhs_false_bb = insert_bb(program, context, lhs_false_bb);
+                change_current_bb(program, context, lhs_false_bb);
+                let rhs_val = rhs.build_ir(program, context)?;
+                let rhs_not_0_val =
+                    new_value_builder(program, context).binary(BinaryOp::NotEq, rhs_val, val_0);
+                add_value(program, context, rhs_not_0_val)?;
+                let res_store_rhs =
+                    new_value_builder(program, context).store(rhs_not_0_val, res_val);
+                add_value(program, context, res_store_rhs)?;
+                let lhs_false_jump = new_value_builder(program, context).jump(lhs_true_bb);
+                add_value(program, context, lhs_false_jump)?;
+                // build lhs_true_bb
+                let lhs_true_bb = insert_bb(program, context, lhs_true_bb);
+                change_current_bb(program, context, lhs_true_bb);
+                let load_val = new_value_builder(program, context).load(res_val);
+                add_value(program, context, load_val)?;
+                Ok(load_val)
             }
         }
     }

@@ -1,7 +1,7 @@
 use super::*;
 use koopa::ir::builder::{BasicBlockBuilder, BlockBuilder, LocalBuilder};
 use koopa::ir::entities::ValueData;
-use koopa::ir::{BasicBlock, Program, Value, ValueKind};
+use koopa::ir::{BasicBlock, FunctionData, Program, Value, ValueKind};
 use std::collections::HashMap;
 
 pub fn new_value_builder<'a>(
@@ -177,4 +177,17 @@ impl SymbolTableStack {
     pub fn get_depth(&self) -> usize {
         self.tables.len()
     }
+}
+
+// Debug
+pub fn print_value(program: &Program, context: &IrContext, value: Value) {
+    let value_data = get_valuedata(program, context, value);
+    println!("value: {:?}", value);
+    print_value_data(value_data);
+}
+
+pub fn print_value_data(value_data: &ValueData) {
+    println!("kind: {:?}", value_data.kind());
+    println!("type: {:?}", value_data.ty());
+    println!("size: {:?}", value_data.ty().size());
 }
