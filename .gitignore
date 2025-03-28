@@ -26,5 +26,6 @@ Cargo.lock
 
 # Files for test
 /test
+/wd
 
 .vscode

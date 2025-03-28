@@ -1,6 +1,7 @@
 use super::*;
+use koopa::ir::builder::{BasicBlockBuilder, BlockBuilder, LocalBuilder};
 use koopa::ir::entities::ValueData;
-use koopa::ir::{builder::LocalBuilder, BasicBlock, Program, Value};
+use koopa::ir::{BasicBlock, Program, Value, ValueKind};
 use std::collections::HashMap;
 
 pub fn new_value_builder<'a>(
@@ -11,18 +12,77 @@ pub fn new_value_builder<'a>(
     func_data.dfg_mut().new_value()
 }
 
+pub fn new_bb_builder<'a>(
+    program: &'a mut Program,
+    context: &'a mut IrContext,
+) -> BlockBuilder<'a> {
+    let func_data = program.func_mut(context.current_func.unwrap());
+    func_data.dfg_mut().new_bb()
+}
+
+pub fn create_bb<'a>(
+    program: &'a mut Program,
+    context: &'a mut IrContext,
+    name: &str,
+) -> BasicBlock {
+    let func_data = program.func_mut(context.current_func.unwrap());
+    let block = func_data
+        .dfg_mut()
+        .new_bb()
+        .basic_block(Some(name.to_string()));
+    func_data
+        .layout_mut()
+        .bbs_mut()
+        .push_key_back(block)
+        .unwrap();
+    block
+}
+
+pub fn new_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, name: &str) -> BasicBlock {
+    let func_data = program.func_mut(context.current_func.unwrap());
+    func_data
+        .dfg_mut()
+        .new_bb()
+        .basic_block(Some(name.to_string()))
+}
+
+pub fn insert_bb<'a>(
+    program: &'a mut Program,
+    context: &'a mut IrContext,
+    bb: BasicBlock,
+) -> BasicBlock {
+    let func_data = program.func_mut(context.current_func.unwrap());
+    func_data.layout_mut().bbs_mut().push_key_back(bb).unwrap();
+    bb
+}
+
+pub fn change_current_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, bb: BasicBlock) {
+    // 清空prev_is_ret
+    context.current_bb = Some(bb);
+    context.prev_bb_end = false;
+}
+
 pub fn add_value(
     program: &mut Program,
     context: &mut IrContext,
     value: Value,
 ) -> Result<(), String> {
+    let bb = if context.prev_bb_end {
+        let bb = create_bb(program, context, "%new_bb");
+        change_current_bb(program, context, bb);
+        bb
+    } else {
+        context.current_bb.unwrap()
+    };
     let func_data = program.func_mut(context.current_func.unwrap());
-    let bb = context.current_block.unwrap();
     let insert_ok = func_data
         .layout_mut()
         .bb_mut(bb)
         .insts_mut()
         .push_key_back(value);
+    if let ValueKind::Return(_) = get_valuekind(program, context, value) {
+        context.prev_bb_end = true;
+    }
     match insert_ok {
         Ok(_) => Ok(()),
         Err(value) => Err(format!("Failed to insert value: {:?}", value)),
@@ -48,13 +108,21 @@ pub fn set_value_name<'a>(
         .dfg_mut()
         .set_value_name(value, Some(name.to_string()));
 }
-pub fn get_valuedata_kind<'a>(
+pub fn get_valuekind<'a>(
+    program: &'a Program,
+    context: &'a IrContext,
+    value: Value,
+) -> &'a ValueKind {
+    let value_data = get_valuedata(program, context, value);
+    value_data.kind()
+}
+pub fn get_typekind<'a>(
     program: &'a Program,
     context: &'a IrContext,
     value: Value,
 ) -> &'a TypeKind {
-    let func_data = program.func(context.current_func.unwrap());
-    func_data.dfg().value(value).ty().kind()
+    let value_data = get_valuedata(program, context, value);
+    value_data.ty().kind()
 }
 
 // Symbol Table

@@ -141,18 +141,10 @@ impl IrGenerator for FuncDef {
         let func = program.new_func(func_data);
         context.current_func = Some(func);
         // create entry block
-        let func_data = program.func_mut(func);
-        let entry_block = func_data
-            .dfg_mut()
-            .new_bb()
-            .basic_block(Some("%entry".to_string()));
-        func_data
-            .layout_mut()
-            .bbs_mut()
-            .push_key_back(entry_block)
-            .unwrap();
-        context.current_block = Some(entry_block);
-        // create block
+        let entry_bb = create_bb(program, context, "%entry");
+        change_current_bb(program, context, entry_bb);
+        // compile block
+        // 注意 BasicBlock和Block的区别
         self.block.build_ir(program, context)?;
         Ok(())
     }
@@ -169,9 +161,6 @@ impl IrGenerator for Block {
                 BlockItem::Decl(decl) => decl.build_ir(program, context)?,
                 BlockItem::Stmt(stmt) => {
                     stmt.build_ir(program, context)?;
-                    if let Stmt::ReturnStmt(_) = **stmt {
-                        break;
-                    }
                 }
             }
         }

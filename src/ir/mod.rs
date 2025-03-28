@@ -13,8 +13,9 @@ pub trait IrGenerator {
 }
 pub struct IrContext {
     current_func: Option<Function>,
-    current_block: Option<BasicBlock>,
+    current_bb: Option<BasicBlock>,
     symbol_tables: SymbolTableStack,
+    prev_bb_end: bool,
 }
 impl IrGenerator for CompUnit {
     type Output = Result<(), String>;
@@ -28,8 +29,9 @@ pub fn compile(ast: &CompUnit) -> koopa::ir::Program {
     let mut program = Program::new();
     let mut context = IrContext {
         current_func: None,
-        current_block: None,
+        current_bb: None,
         symbol_tables: SymbolTableStack::new(),
+        prev_bb_end: false,
     };
     ast.build_ir(&mut program, &mut context).unwrap();
     program

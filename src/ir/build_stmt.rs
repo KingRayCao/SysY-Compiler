@@ -30,13 +30,59 @@ impl IrGenerator for Stmt {
                 block.build_ir(program, context)?;
                 Ok(())
             }
+            Stmt::IfStmt(exp, then_stmt, else_stmt) => {
+                let exp_val = exp.build_ir(program, context)?;
+                match else_stmt {
+                    Some(else_stmt) => {
+                        // if else pair
+                        let then_bb = new_bb(program, context, "%then");
+                        let else_bb = new_bb(program, context, "%else");
+                        let end_bb = new_bb(program, context, "%end");
+                        let if_stmt_value =
+                            new_value_builder(program, context).branch(exp_val, then_bb, else_bb);
+                        add_value(program, context, if_stmt_value)?;
+                        // build then stmt
+                        let then_bb = insert_bb(program, context, then_bb);
+                        change_current_bb(program, context, then_bb);
+                        let then_stmt_val = then_stmt.build_ir(program, context)?;
+                        let then_jump = new_value_builder(program, context).jump(end_bb);
+                        add_value(program, context, then_jump)?;
+                        // build else stmt
+                        let else_bb = insert_bb(program, context, else_bb);
+                        change_current_bb(program, context, else_bb);
+                        let else_stmt_val = else_stmt.build_ir(program, context)?;
+                        let else_jump = new_value_builder(program, context).jump(end_bb);
+                        add_value(program, context, else_jump)?;
+                        // build end stmt
+                        let end_bb = insert_bb(program, context, end_bb);
+                        change_current_bb(program, context, end_bb);
+                    }
+                    None => {
+                        // single if
+                        let then_bb = new_bb(program, context, "%then");
+                        let end_bb = new_bb(program, context, "%end");
+                        let if_stmt_value =
+                            new_value_builder(program, context).branch(exp_val, then_bb, end_bb);
+                        add_value(program, context, if_stmt_value)?;
+                        // build then stmt
+                        let then_bb = insert_bb(program, context, then_bb);
+                        change_current_bb(program, context, then_bb);
+                        let then_stmt_val = then_stmt.build_ir(program, context)?;
+                        let then_jump = new_value_builder(program, context).jump(end_bb);
+                        add_value(program, context, then_jump)?;
+                        // build end stmt
+                        let end_bb = insert_bb(program, context, end_bb);
+                        change_current_bb(program, context, end_bb);
+                    }
+                }
+                Ok(())
+            }
             Stmt::ReturnStmt(exp) => {
                 let ret_val = exp.build_ir(program, context)?;
                 let ret = new_value_builder(program, context).ret(Some(ret_val));
                 add_value(program, context, ret)?;
                 Ok(())
             }
-            _ => Err("Unsupported statement".to_string()),
         }
     }
 }

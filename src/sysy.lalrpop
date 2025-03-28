@@ -100,8 +100,24 @@ BlockItem: BlockItem = {
 }
 
 // ---- Statement ----
+//https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
 
-Stmt: Stmt ={
+Stmt: Stmt = {
+  <open_stmt: OpenStmt> => <>,
+  <closed_stmt: ClosedStmt> => <>,
+}
+
+OpenStmt: Stmt = {
+  "if" "(" <exp: Exp> ")" <stmt: Stmt> => Stmt::IfStmt (Box::new(exp), Box::new(stmt), None),
+  "if" "(" <exp: Exp> ")" <closed_stmt: ClosedStmt> "else" <open_stmt: OpenStmt> => Stmt::IfStmt (Box::new(exp), Box::new(closed_stmt), Some(Box::new(open_stmt))),
+}
+
+ClosedStmt: Stmt = {
+  <non_if_stmt: NonIfStmt> => <>,
+  "if" "(" <exp: Exp> ")" <closed_stmt0: ClosedStmt> "else" <closed_stmt1: ClosedStmt> => Stmt::IfStmt (Box::new(exp), Box::new(closed_stmt0), Some(Box::new(closed_stmt1))),
+}
+
+NonIfStmt: Stmt ={
   <lval: LVal> "=" <exp: Exp> ";" => Stmt::AssignStmt (Box::new(lval), Box::new(exp)),
   <exp: Exp?> ";" => Stmt::ExpStmt (Box::new(exp)),
   <block: Block> => Stmt::BlockStmt (Box::new(block)),
