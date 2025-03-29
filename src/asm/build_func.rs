@@ -33,7 +33,13 @@ impl GenerateAsm for FunctionData {
         );
         // body
         for (&bb, node) in self.layout().bbs() {
+            let bb_name = get_bb_name(self, bb);
+            println!("bb_name: {}", bb_name);
+            if bb_name != "entry" {
+                asm += &format!("\n{}:\n", bb_name);
+            }
             for &inst in node.insts().keys() {
+                print_value(self, &func_context, inst);
                 asm += &value_to_asm(inst, &mut func_context);
             }
         }

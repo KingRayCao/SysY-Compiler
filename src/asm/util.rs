@@ -1,14 +1,19 @@
 use super::build_func::FuncContext;
 use super::gen_riscv::*;
 use super::{Asm, Reg};
-use koopa::ir::entities::ValueData;
-use koopa::ir::{FunctionData, Value, ValueKind};
+use koopa::ir::entities::{BasicBlockData, ValueData};
+use koopa::ir::{BasicBlock, FunctionData, Value, ValueKind};
 use std::collections::HashMap;
 
 pub fn get_value_data(func_data: &FunctionData, value: Value) -> &ValueData {
     func_data.dfg().value(value)
 }
-
+pub fn get_bb_data(func_data: &FunctionData, bb: BasicBlock) -> &BasicBlockData {
+    func_data.dfg().bb(bb)
+}
+pub fn get_bb_name(func_data: &FunctionData, bb: BasicBlock) -> &str {
+    &get_bb_data(func_data, bb).name().as_ref().unwrap()[1..]
+}
 // Reg-Value Table
 pub struct RegValueTable {
     reg_value: HashMap<Reg, Option<Option<Value>>>,
@@ -122,4 +127,9 @@ pub fn print_value_data(value_data: &ValueData) {
     println!("kind: {:?}", value_data.kind());
     println!("type: {:?}", value_data.ty());
     println!("size: {:?}", value_data.ty().size());
+}
+
+pub fn print_value(func_data: &FunctionData, func_ctx: &FuncContext, value: Value) {
+    let value_data = get_value_data(func_data, value);
+    print_value_data(value_data);
 }

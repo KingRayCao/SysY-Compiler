@@ -220,6 +220,10 @@ impl IrGenerator for LAndExp {
                        result = exp2 != 0;
                    }
                 */
+                // new bb to ensure side case: return a && b; return c && d;
+                let and_bb = new_bb(program, context, "%and_bb");
+                let and_bb = insert_bb(program, context, and_bb);
+                change_current_bb(program, context, and_bb);
                 let res_val = new_value_builder(program, context).alloc(Type::get_i32());
                 add_value(program, context, res_val)?;
                 let val_0 = new_value_builder(program, context).integer(0);
@@ -266,6 +270,10 @@ impl IrGenerator for LOrExp {
                        result = rhs != 0;
                    }
                 */
+                // new bb to ensure side case: return a || b; return c || d;
+                let or_bb = new_bb(program, context, "%or_bb");
+                let or_bb = insert_bb(program, context, or_bb);
+                change_current_bb(program, context, or_bb);
                 let res_val = new_value_builder(program, context).alloc(Type::get_i32());
                 add_value(program, context, res_val)?;
                 let val_1 = new_value_builder(program, context).integer(1);

@@ -1,17 +1,13 @@
 use super::*;
-use koopa::ir::builder::{BasicBlockBuilder, BlockBuilder, LocalBuilder};
+use key_node_list::Node;
+use koopa::ir::builder::{
+    BasicBlockBuilder, BlockBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
+};
 use koopa::ir::entities::ValueData;
 use koopa::ir::{BasicBlock, FunctionData, Program, Value, ValueKind};
 use std::collections::HashMap;
 
-pub fn new_value_builder<'a>(
-    program: &'a mut Program,
-    context: &'a mut IrContext,
-) -> LocalBuilder<'a> {
-    let func_data = program.func_mut(context.current_func.unwrap());
-    func_data.dfg_mut().new_value()
-}
-
+// ============ Basic Block utils ============
 pub fn new_bb_builder<'a>(
     program: &'a mut Program,
     context: &'a mut IrContext,
@@ -25,25 +21,18 @@ pub fn create_bb<'a>(
     context: &'a mut IrContext,
     name: &str,
 ) -> BasicBlock {
-    let func_data = program.func_mut(context.current_func.unwrap());
-    let block = func_data
-        .dfg_mut()
-        .new_bb()
-        .basic_block(Some(name.to_string()));
-    func_data
-        .layout_mut()
-        .bbs_mut()
-        .push_key_back(block)
-        .unwrap();
-    block
+    let block = new_bb(program, context, name);
+    insert_bb(program, context, block)
 }
 
 pub fn new_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, name: &str) -> BasicBlock {
     let func_data = program.func_mut(context.current_func.unwrap());
-    func_data
-        .dfg_mut()
-        .new_bb()
-        .basic_block(Some(name.to_string()))
+    let name = if name == "%entry" {
+        name.to_string()
+    } else {
+        context.name_manager.get_name(name)
+    };
+    func_data.dfg_mut().new_bb().basic_block(Some(name))
 }
 
 pub fn insert_bb<'a>(
@@ -57,6 +46,11 @@ pub fn insert_bb<'a>(
 }
 
 pub fn change_current_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, bb: BasicBlock) {
+    // 检查前一个bb是否closed
+    if context.current_bb.is_some() && !bb_closed(program, context, context.current_bb.unwrap()) {
+        let jump_val = new_value_builder(program, context).jump(bb);
+        add_value(program, context, jump_val).unwrap();
+    }
     context.current_bb = Some(bb);
 }
 
@@ -72,6 +66,37 @@ pub fn get_bb_last_value<'a>(
         .keys()
         .last()
         .map(|v| v.clone())
+}
+
+pub fn bb_closed(program: &Program, context: &IrContext, bb: BasicBlock) -> bool {
+    let func_data = program.func(context.current_func.unwrap());
+    let last_value = func_data.layout().bbs()[&bb]
+        .insts()
+        .keys()
+        .last()
+        .map(|v| v.clone());
+    if let Some(last_value) = last_value {
+        if let ValueKind::Return(_) = get_valuekind(program, context, last_value) {
+            return true;
+        }
+        if let ValueKind::Jump(_) = get_valuekind(program, context, last_value) {
+            return true;
+        }
+        if let ValueKind::Branch(_) = get_valuekind(program, context, last_value) {
+            return true;
+        }
+    }
+    false
+}
+
+// ============ Value utils ============
+
+pub fn new_value_builder<'a>(
+    program: &'a mut Program,
+    context: &'a mut IrContext,
+) -> LocalBuilder<'a> {
+    let func_data = program.func_mut(context.current_func.unwrap());
+    func_data.dfg_mut().new_value()
 }
 
 pub fn add_value(
@@ -179,6 +204,30 @@ impl SymbolTableStack {
     }
 }
 
+// NameManager: Generate unique name for input str
+pub struct NameManager {
+    name_map: HashMap<String, i32>,
+}
+
+impl NameManager {
+    pub fn new() -> Self {
+        NameManager {
+            name_map: HashMap::new(),
+        }
+    }
+    pub fn get_name(&mut self, name: &str) -> String {
+        if !self.name_map.contains_key(name) {
+            self.name_map.insert(name.to_string(), 0);
+        }
+        let count = self.name_map.get_mut(name).unwrap();
+        *count += 1;
+        let new_name = format!("{}_{}", name, count);
+        new_name
+    }
+    pub fn reset(&mut self) {
+        self.name_map.clear();
+    }
+}
 // Debug
 pub fn print_value(program: &Program, context: &IrContext, value: Value) {
     let value_data = get_valuedata(program, context, value);

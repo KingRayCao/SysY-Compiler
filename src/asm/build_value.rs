@@ -138,6 +138,27 @@ pub fn value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
             func_ctx.reg_value_table.free_reg(store_reg);
             asm
         }
+        ValueKind::Jump(jump) => {
+            let jump_bb = jump.target();
+            let jump_bb_name = get_bb_name(func_ctx.func_data, jump_bb);
+            asm += &format!("  j {}\n", jump_bb_name);
+            asm
+        }
+        ValueKind::Branch(branch) => {
+            let cond_value = branch.cond();
+            let cond_asm = child_value_to_asm(cond_value, func_ctx);
+            asm += &cond_asm;
+            let (cond_reg_asm, cond_reg) = func_ctx.load_value_to_reg(cond_value);
+            asm += &cond_reg_asm;
+            let true_bb = branch.true_bb();
+            let false_bb = branch.false_bb();
+            let true_bb_name = get_bb_name(func_ctx.func_data, true_bb);
+            let false_bb_name = get_bb_name(func_ctx.func_data, false_bb);
+            asm += &format!("  bnez {}, {}\n", cond_reg, true_bb_name);
+            asm += &format!("  j {}\n", false_bb_name);
+            func_ctx.reg_value_table.free_reg(cond_reg);
+            asm
+        }
         _ => {
             panic!("unsupported value kind: {:?}", value_data.kind());
         }
