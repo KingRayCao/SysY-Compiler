@@ -46,7 +46,7 @@ pub fn insert_bb<'a>(
 }
 
 pub fn change_current_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, bb: BasicBlock) {
-    // 检查前一个bb是否closed
+    // 检查前一个bb是否closed，如果没有close，则需要跳转到新bb
     if context.current_bb.is_some() && !bb_closed(program, context, context.current_bb.unwrap()) {
         let jump_val = new_value_builder(program, context).jump(bb);
         add_value(program, context, jump_val).unwrap();
@@ -104,12 +104,13 @@ pub fn add_value(
     context: &mut IrContext,
     value: Value,
 ) -> Result<(), String> {
-    let bb = context.current_bb.unwrap();
+    let mut bb = context.current_bb.unwrap();
     let bb_last_value = get_bb_last_value(program, context);
-    if let Some(bb_last_value) = bb_last_value {
-        if let ValueKind::Return(_) = get_valuekind(program, context, bb_last_value) {
-            return Ok(());
-        }
+    // 如果当前bb已经closed，则新建bb
+    if bb_closed(program, context, bb) {
+        let new_bb = new_bb(program, context, "%new_bb");
+        bb = insert_bb(program, context, new_bb);
+        change_current_bb(program, context, bb);
     }
     let func_data = program.func_mut(context.current_func.unwrap());
     let insert_ok = func_data
@@ -159,7 +160,8 @@ pub fn get_typekind<'a>(
     value_data.ty().kind()
 }
 
-// Symbol Table
+// ============ Symbol Table ============
+
 pub struct SymbolTableStack {
     tables: Vec<HashMap<String, SymbolTableEntry>>,
 }
@@ -204,7 +206,9 @@ impl SymbolTableStack {
     }
 }
 
-// NameManager: Generate unique name for input str
+// ============ NameManager ============
+// Generate unique name for input str
+
 pub struct NameManager {
     name_map: HashMap<String, i32>,
 }
@@ -228,7 +232,51 @@ impl NameManager {
         self.name_map.clear();
     }
 }
-// Debug
+
+// ============ WhileStack ============
+// Store current while loop info
+
+pub struct WhileStack {
+    stack: Vec<(BasicBlock, BasicBlock)>,
+}
+
+impl WhileStack {
+    pub fn new() -> Self {
+        WhileStack { stack: Vec::new() }
+    }
+    pub fn push(&mut self, while_bb: BasicBlock, end_bb: BasicBlock) {
+        self.stack.push((while_bb, end_bb));
+    }
+    pub fn pop(&mut self) -> Option<(BasicBlock, BasicBlock)> {
+        self.stack.pop()
+    }
+    pub fn get_top(&self) -> Option<(BasicBlock, BasicBlock)> {
+        self.stack.last().cloned()
+    }
+}
+// ============ IrContext ============
+
+pub struct IrContext {
+    pub current_func: Option<Function>,
+    pub current_bb: Option<BasicBlock>,
+    pub symbol_tables: SymbolTableStack,
+    pub name_manager: NameManager,
+    pub while_stack: WhileStack,
+}
+
+impl IrContext {
+    pub fn new() -> Self {
+        IrContext {
+            current_func: None,
+            current_bb: None,
+            symbol_tables: SymbolTableStack::new(),
+            name_manager: NameManager::new(),
+            while_stack: WhileStack::new(),
+        }
+    }
+}
+
+// ============ Debug ============
 pub fn print_value(program: &Program, context: &IrContext, value: Value) {
     let value_data = get_valuedata(program, context, value);
     println!("value: {:?}", value);

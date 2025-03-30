@@ -5,5 +5,8 @@ pub enum Stmt {
     ExpStmt(Box<Option<Exp>>),
     BlockStmt(Box<Block>),
     IfStmt(Box<Exp>, Box<Stmt>, Option<Box<Stmt>>),
+    WhileStmt(Box<Exp>, Box<Stmt>),
+    BreakStmt,
+    ContinueStmt,
     ReturnStmt(Box<Exp>),
 }

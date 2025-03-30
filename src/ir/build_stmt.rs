@@ -31,6 +31,9 @@ impl IrGenerator for Stmt {
                 Ok(())
             }
             Stmt::IfStmt(exp, then_stmt, else_stmt) => {
+                let if_bb = new_bb(program, context, "%if");
+                let if_bb = insert_bb(program, context, if_bb);
+                change_current_bb(program, context, if_bb);
                 let exp_val = exp.build_ir(program, context)?;
                 match else_stmt {
                     Some(else_stmt) => {
@@ -75,6 +78,41 @@ impl IrGenerator for Stmt {
                         change_current_bb(program, context, end_bb);
                     }
                 }
+                Ok(())
+            }
+            Stmt::WhileStmt(exp, stmt) => {
+                let while_bb = new_bb(program, context, "%while");
+                let while_bb = insert_bb(program, context, while_bb);
+                change_current_bb(program, context, while_bb);
+                let exp_val = exp.build_ir(program, context)?;
+                let loop_bb = new_bb(program, context, "%loop");
+                let end_bb = new_bb(program, context, "%end");
+                let while_br_value =
+                    new_value_builder(program, context).branch(exp_val, loop_bb, end_bb);
+                add_value(program, context, while_br_value)?;
+                // build loop stmt
+                context.while_stack.push(while_bb, end_bb);
+                let loop_bb = insert_bb(program, context, loop_bb);
+                change_current_bb(program, context, loop_bb);
+                let loop_stmt_val = stmt.build_ir(program, context)?;
+                let loop_jump = new_value_builder(program, context).jump(while_bb);
+                add_value(program, context, loop_jump)?;
+                context.while_stack.pop();
+                // build end stmt
+                let end_bb = insert_bb(program, context, end_bb);
+                change_current_bb(program, context, end_bb);
+                Ok(())
+            }
+            Stmt::BreakStmt => {
+                let (while_bb, end_bb) = context.while_stack.get_top().unwrap();
+                let break_jump = new_value_builder(program, context).jump(end_bb);
+                add_value(program, context, break_jump)?;
+                Ok(())
+            }
+            Stmt::ContinueStmt => {
+                let (while_bb, end_bb) = context.while_stack.get_top().unwrap();
+                let continue_jump = new_value_builder(program, context).jump(while_bb);
+                add_value(program, context, continue_jump)?;
                 Ok(())
             }
             Stmt::ReturnStmt(exp) => {
