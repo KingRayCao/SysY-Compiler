@@ -34,7 +34,14 @@ Tier<Op,NextTier>: Box<Expr> = {
 
 // ============= CompUnit =============
 
-pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit { <> };
+pub CompUnit: CompUnit = {
+  <items: (CompItem)*> => CompUnit { <> },
+}
+
+pub CompItem: CompItem = {
+  <decl: Decl> => CompItem::Decl(Box::new(decl)),
+  <func_def: FuncDef> => CompItem::FuncDef(Box::new(func_def)),
+}
 
 // ============= Decl && Def =============
 
@@ -81,18 +88,23 @@ InitVal: InitVal = {
 // ---- Function Definition ----
 
 FuncDef: FuncDef = {
-  <func_type: FuncType> <ident: Ident> "(" ")" <block: Block> => {
+  <return_type: BType> <ident: Ident> "(" <func_f_params: FuncFParams> ")" <block: Block> => {
     FuncDef { <> }
   }
 }
 
-FuncType: FuncType = "int" => FuncType::Int;
+FuncFParams = Comma<FuncFParam>;
+
+FuncFParam: FuncFParam = {
+  <btype: BType> <ident: Ident> => FuncFParam { btype: btype, ident: ident, index: None },
+  <btype: BType> <ident: Ident> "[" "]" <index: ("[" <ConstExp> "]")*> => FuncFParam { btype: btype, ident: ident, index: Some(index) },
+}
 
 // ============= Block && Stmt =============
 
 // ---- Block ----
 
-Block: Block = "{" <block_items: BlockItem*> "}" => Block { <> };
+Block: Block = "{" <block_items: (BlockItem)*> "}" => Block { <> };
 
 BlockItem: BlockItem = {
   <decl: Decl> => BlockItem::Decl (Box::new(decl)),
@@ -110,6 +122,7 @@ Stmt: Stmt = {
 OpenStmt: Stmt = {
   "if" "(" <exp: Exp> ")" <stmt: Stmt> => Stmt::IfStmt (Box::new(exp), Box::new(stmt), None),
   "if" "(" <exp: Exp> ")" <closed_stmt: ClosedStmt> "else" <open_stmt: OpenStmt> => Stmt::IfStmt (Box::new(exp), Box::new(closed_stmt), Some(Box::new(open_stmt))),
+  "while" "(" <exp: Exp> ")" <open_stmt: OpenStmt> => Stmt::WhileStmt (Box::new(exp), Box::new(open_stmt)),
 }
 
 ClosedStmt: Stmt = {
@@ -145,8 +158,11 @@ Number: i32 = <num: IntConst> => <>;
 
 UnaryExp: UnaryExp = {
   <unary_op: UnaryOp> <exp: UnaryExp> => UnaryExp::UnaryExp (unary_op, Box::new(exp)),
+  <ident: Ident> "(" <func_r_params: FuncRParams> ")" => UnaryExp::FuncCallExp (ident, func_r_params),
   <primary_exp: PrimaryExp> => UnaryExp::PrimaryExp (Box::new(primary_exp)), 
 }
+
+FuncRParams = Comma<Exp>;
 
 UnaryOp: UnaryOp = {
   "+" => UnaryOp::Plus,

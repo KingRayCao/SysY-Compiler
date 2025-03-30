@@ -6,23 +6,17 @@ use koopa::ir::TypeKind;
 
 #[derive(Debug)]
 pub struct FuncDef {
-    pub func_type: FuncType,
+    pub return_type: BType,
     pub ident: String,
+    pub func_f_params: Vec<FuncFParam>,
     pub block: Block,
 }
 
 #[derive(Debug)]
-pub enum FuncType {
-    Void,
-    Int,
-}
-impl ToString for FuncType {
-    fn to_string(&self) -> String {
-        match self {
-            FuncType::Void => "void".to_string(),
-            FuncType::Int => "i32".to_string(),
-        }
-    }
+pub struct FuncFParam {
+    pub btype: BType,
+    pub ident: String,
+    pub index: Option<Vec<ConstExp>>,
 }
 
 // ============= Block =============
@@ -57,6 +51,16 @@ pub struct ConstDecl {
 #[derive(Debug)]
 pub enum BType {
     Int,
+    Void,
+}
+
+impl BType {
+    pub fn to_koopa_kind(&self) -> TypeKind {
+        match self {
+            BType::Int => TypeKind::Int32,
+            BType::Void => TypeKind::Unit,
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -15,11 +15,22 @@ pub trait IrGenerator {
 impl IrGenerator for CompUnit {
     type Output = Result<(), String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
-        self.func_def.build_ir(program, context).unwrap();
+        for item in &self.items {
+            item.build_ir(program, context).unwrap();
+        }
         Ok(())
     }
 }
 
+impl IrGenerator for CompItem {
+    type Output = Result<(), String>;
+    fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
+        match self {
+            CompItem::Decl(decl) => decl.build_ir(program, context),
+            CompItem::FuncDef(func_def) => func_def.build_ir(program, context),
+        }
+    }
+}
 pub fn compile(ast: &CompUnit) -> koopa::ir::Program {
     let mut program = Program::new();
     let mut context = IrContext::new();

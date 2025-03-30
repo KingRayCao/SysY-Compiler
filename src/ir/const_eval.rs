@@ -35,6 +35,7 @@ impl ConstEval for UnaryExp {
                     UnaryOp::Not => Ok(if val != 0 { 0 } else { 1 }),
                 }
             }
+            _ => unreachable!(),
         }
     }
 }

@@ -30,6 +30,7 @@ impl IrGenerator for ConstDecl {
                 }
                 Ok(())
             }
+            _ => unreachable!(),
         }
     }
 }
@@ -122,14 +123,6 @@ impl IrGenerator for VarDef {
 
 // ---- Function Declaration ----
 
-impl FuncType {
-    fn to_koopa_kind(&self) -> TypeKind {
-        match self {
-            FuncType::Void => TypeKind::Unit,
-            FuncType::Int => TypeKind::Int32,
-        }
-    }
-}
 impl IrGenerator for FuncDef {
     type Output = Result<(), String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
@@ -137,7 +130,7 @@ impl IrGenerator for FuncDef {
         let func_data = FunctionData::new(
             format!("@{}", self.ident),
             Vec::new(),
-            Type::get(self.func_type.to_koopa_kind()),
+            Type::get(self.return_type.to_koopa_kind()),
         );
         let func = program.new_func(func_data);
         context.current_func = Some(func);
@@ -161,7 +154,7 @@ impl IrGenerator for FuncDef {
             need_ret = true;
         }
         if need_ret {
-            match self.func_type.to_koopa_kind() {
+            match self.return_type.to_koopa_kind() {
                 TypeKind::Unit => {
                     let ret = new_value_builder(program, context).ret(None);
                     add_value(program, context, ret).unwrap();

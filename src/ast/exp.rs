@@ -19,6 +19,7 @@ pub enum PrimaryExp {
 #[derive(Debug)]
 pub enum UnaryExp {
     UnaryExp(UnaryOp, Box<UnaryExp>),
+    FuncCallExp(String, Vec<Exp>),
     PrimaryExp(Box<PrimaryExp>),
 }
 
@@ -27,16 +28,6 @@ pub enum UnaryOp {
     Plus,
     Minus,
     Not,
-}
-
-impl ToString for UnaryOp {
-    fn to_string(&self) -> String {
-        match self {
-            UnaryOp::Plus => "+".to_string(),
-            UnaryOp::Minus => "-".to_string(),
-            UnaryOp::Not => "!".to_string(),
-        }
-    }
 }
 
 #[derive(Debug)]
