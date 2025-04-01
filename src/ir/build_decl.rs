@@ -2,6 +2,7 @@ use super::const_eval::*;
 use super::*;
 use crate::ast::decl::*;
 use crate::ast::stmt::*;
+use koopa::ir::builder::GlobalInstBuilder;
 use koopa::ir::builder::ValueBuilder;
 use koopa::ir::builder::{BasicBlockBuilder, LocalInstBuilder};
 use koopa::ir::{FunctionData, Type, TypeKind, ValueKind};
@@ -72,56 +73,108 @@ impl IrGenerator for VarDecl {
 impl IrGenerator for VarDef {
     type Output = Result<(), String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
-        match self {
-            VarDef::VarDef { ident, index } => {
-                if index.is_empty() {
-                    // Single Variable
-                    let alloc = new_value_builder(program, context).alloc(Type::get_i32());
-                    add_value(program, context, alloc).unwrap();
-                    set_value_name(
-                        program,
-                        context,
-                        alloc,
-                        format!("@{}_{}", ident, context.symbol_tables.get_depth()).as_str(),
-                    );
-                    context
-                        .symbol_tables
-                        .add_var(&ident, TypeKind::Int32, alloc);
-                } else {
-                    todo!()
-                }
-                Ok(())
-            }
-            VarDef::VarDefInit {
-                ident,
-                index,
-                init_val,
-            } => {
-                if index.is_empty() {
-                    let alloc = new_value_builder(program, context).alloc(Type::get_i32());
-                    add_value(program, context, alloc).unwrap();
-                    set_value_name(
-                        program,
-                        context,
-                        alloc,
-                        format!("@{}_{}", ident, context.symbol_tables.get_depth()).as_str(),
-                    );
-                    context
-                        .symbol_tables
-                        .add_var(&ident, TypeKind::Int32, alloc);
-                    match init_val.as_ref() {
-                        InitVal::Exp(exp) => {
-                            let exp_val = exp.build_ir(program, context).unwrap();
-                            let store = new_value_builder(program, context).store(exp_val, alloc);
-                            add_value(program, context, store).unwrap();
-                            Ok(())
-                        }
-                        InitVal::Array(init_val_vec) => {
-                            todo!()
-                        }
+        if !context.is_global {
+            // Local Variable
+            match self {
+                VarDef::VarDef { ident, index } => {
+                    if index.is_empty() {
+                        // Single Variable
+                        let alloc = new_value_builder(program, context).alloc(Type::get_i32());
+                        add_value(program, context, alloc).unwrap();
+                        set_value_name(
+                            program,
+                            context,
+                            alloc,
+                            format!("@{}_{}", ident, context.symbol_tables.get_depth()).as_str(),
+                        );
+                        context
+                            .symbol_tables
+                            .add_var(&ident, TypeKind::Int32, alloc);
+                    } else {
+                        // Array Variable
+                        todo!()
                     }
-                } else {
-                    todo!()
+                    return Ok(());
+                }
+                VarDef::VarDefInit {
+                    ident,
+                    index,
+                    init_val,
+                } => {
+                    if index.is_empty() {
+                        let alloc = new_value_builder(program, context).alloc(Type::get_i32());
+                        add_value(program, context, alloc).unwrap();
+                        set_value_name(
+                            program,
+                            context,
+                            alloc,
+                            format!("@{}_{}", ident, context.symbol_tables.get_depth()).as_str(),
+                        );
+                        context
+                            .symbol_tables
+                            .add_var(&ident, TypeKind::Int32, alloc);
+                        match init_val.as_ref() {
+                            InitVal::Exp(exp) => {
+                                let exp_val = exp.build_ir(program, context).unwrap();
+                                let store =
+                                    new_value_builder(program, context).store(exp_val, alloc);
+                                add_value(program, context, store).unwrap();
+                                return Ok(());
+                            }
+                            InitVal::Array(init_val_vec) => {
+                                unreachable!()
+                            }
+                        }
+                    } else {
+                        // Array Variable
+                        todo!()
+                    }
+                }
+            }
+        } else {
+            // Global Variable
+            match self {
+                VarDef::VarDef { ident, index } => {
+                    if index.is_empty() {
+                        // Single Variable
+                        let val_0 = program.new_value().integer(0);
+                        let alloc = program.new_value().global_alloc(val_0);
+                        program.set_value_name(alloc, Some(format!("@{}", ident)));
+                        context
+                            .symbol_tables
+                            .add_var(&ident, TypeKind::Int32, alloc);
+                    } else {
+                        // Array Variable
+                        todo!()
+                    }
+                    Ok(())
+                }
+                VarDef::VarDefInit {
+                    ident,
+                    index,
+                    init_val,
+                } => {
+                    if index.is_empty() {
+                        // Single Variable
+                        match init_val.as_ref() {
+                            InitVal::Exp(exp) => {
+                                let const_init_val = exp.get_const_value(context).unwrap();
+                                let val = program.new_value().integer(const_init_val);
+                                let alloc = program.new_value().global_alloc(val);
+                                program.set_value_name(alloc, Some(format!("@{}", ident)));
+                                context
+                                    .symbol_tables
+                                    .add_var(&ident, TypeKind::Int32, alloc);
+                            }
+                            InitVal::Array(init_val_vec) => {
+                                unreachable!()
+                            }
+                        }
+                    } else {
+                        // Array Variable
+                        todo!()
+                    }
+                    Ok(())
                 }
             }
         }

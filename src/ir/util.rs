@@ -1,11 +1,91 @@
 use super::*;
 use key_node_list::Node;
 use koopa::ir::builder::{
-    BasicBlockBuilder, BlockBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
+    BasicBlockBuilder, BlockBuilder, GlobalBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
 };
 use koopa::ir::entities::ValueData;
 use koopa::ir::{BasicBlock, FunctionData, Program, Type, Value, ValueKind};
 use std::collections::HashMap;
+
+// ============ Library Functions ============
+
+pub fn init_lib_decl(program: &mut Program, context: &mut IrContext) {
+    /*
+       Library Functions
+       decl @getint(): i32
+       decl @getch(): i32
+       decl @getarray(*i32): i32
+       decl @putint(i32)
+       decl @putch(i32)
+       decl @putarray(i32, *i32)
+       decl @starttime()
+       decl @stoptime()
+    */
+
+    // getint
+    let func_data = FunctionData::new_decl(
+        "@getint".to_string(),
+        Vec::new(),
+        Type::get(TypeKind::Int32),
+    );
+    let func = program.new_func(func_data);
+
+    // getch
+    let func_data =
+        FunctionData::new_decl("@getch".to_string(), Vec::new(), Type::get(TypeKind::Int32));
+    let func = program.new_func(func_data);
+
+    // getarray
+    let func_data = FunctionData::new_decl(
+        "@getarray".to_string(),
+        vec![Type::get_pointer(Type::get(TypeKind::Int32))],
+        Type::get(TypeKind::Int32),
+    );
+    let func = program.new_func(func_data);
+
+    // putint
+    let func_data = FunctionData::new_decl(
+        "@putint".to_string(),
+        vec![Type::get(TypeKind::Int32)],
+        Type::get(TypeKind::Unit),
+    );
+    let func = program.new_func(func_data);
+
+    // putch
+    let func_data = FunctionData::new_decl(
+        "@putch".to_string(),
+        vec![Type::get(TypeKind::Int32)],
+        Type::get(TypeKind::Unit),
+    );
+    let func = program.new_func(func_data);
+
+    // putarray
+    let func_data = FunctionData::new_decl(
+        "@putarray".to_string(),
+        vec![
+            Type::get(TypeKind::Int32),
+            Type::get_pointer(Type::get(TypeKind::Int32)),
+        ],
+        Type::get(TypeKind::Unit),
+    );
+    let func = program.new_func(func_data);
+
+    // starttime
+    let func_data = FunctionData::new_decl(
+        "@starttime".to_string(),
+        Vec::new(),
+        Type::get(TypeKind::Unit),
+    );
+    let func = program.new_func(func_data);
+
+    // stoptime
+    let func_data = FunctionData::new_decl(
+        "@stoptime".to_string(),
+        Vec::new(),
+        Type::get(TypeKind::Unit),
+    );
+    let func = program.new_func(func_data);
+}
 
 // ============ Basic Block utils ============
 
@@ -288,6 +368,7 @@ pub struct IrContext {
     pub symbol_tables: SymbolTableStack,
     pub name_manager: NameManager,
     pub while_stack: WhileStack,
+    pub is_global: bool,
 }
 
 impl IrContext {
@@ -298,6 +379,7 @@ impl IrContext {
             symbol_tables: SymbolTableStack::new(),
             name_manager: NameManager::new(),
             while_stack: WhileStack::new(),
+            is_global: true,
         };
         ret.symbol_tables.push_table(); // 全局变量表
         ret
