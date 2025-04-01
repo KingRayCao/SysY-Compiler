@@ -5,6 +5,7 @@
 
 use crate::asm::*;
 use crate::ir::*;
+use koopa::ir::Type;
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
@@ -20,6 +21,8 @@ pub mod ir;
 lalrpop_mod!(sysy);
 
 fn main() -> Result<()> {
+    // INIT
+    Type::set_ptr_size(4);
     // 解析命令行参数
     let mut args = args();
     args.next();

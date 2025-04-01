@@ -27,7 +27,9 @@ impl IrGenerator for Stmt {
                 Ok(())
             }
             Stmt::BlockStmt(block) => {
+                context.symbol_tables.push_table();
                 block.build_ir(program, context)?;
+                context.symbol_tables.pop_table();
                 Ok(())
             }
             Stmt::IfStmt(exp, then_stmt, else_stmt) => {

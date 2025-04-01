@@ -90,6 +90,17 @@ impl IrGenerator for UnaryExp {
                 };
                 Ok(value)
             }
+            UnaryExp::FuncCallExp(func_name, func_r_params) => {
+                let params_val = func_r_params
+                    .iter()
+                    .map(|exp| exp.build_ir(program, context).unwrap())
+                    .collect();
+                let func_name = format!("@{}", func_name);
+                let callee = get_func(program, context, &func_name);
+                let call_val = new_value_builder(program, context).call(callee, params_val);
+                add_value(program, context, call_val)?;
+                Ok(call_val)
+            }
             UnaryExp::PrimaryExp(exp) => exp.build_ir(program, context),
         }
     }

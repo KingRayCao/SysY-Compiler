@@ -56,7 +56,10 @@ ConstDecl: ConstDecl = {
   "const" <btype: BType> <const_defs: ConstDefs> ";" => ConstDecl { <> },
 }
 
-BType: BType = "int" => BType::Int;
+BType: BType = {
+  "int" => BType::Int,
+  "void" => BType::Void,
+}
 
 ConstDefs = Comma<ConstDef>;
 
@@ -66,7 +69,10 @@ ConstDef: ConstDef = {
 
 ConstInitVal: ConstInitVal = {
   <const_exp: ConstExp> => ConstInitVal::ConstExp (Box::new(const_exp)),
+  "{" <const_init_vals: ConstInitVals> "}" => ConstInitVal::ConstArray (const_init_vals),
 }
+
+ConstInitVals = Comma<ConstInitVal>;
 
 // ---- Variable Declaration ----
 
@@ -83,7 +89,10 @@ VarDef: VarDef = {
 
 InitVal: InitVal = {
   <exp: Exp> => InitVal::Exp (Box::new(exp)),
+  "{" <init_vals: InitVals> "}" => InitVal::Array (init_vals),
 }
+
+InitVals = Comma<InitVal>;
 
 // ---- Function Definition ----
 
@@ -96,8 +105,8 @@ FuncDef: FuncDef = {
 FuncFParams = Comma<FuncFParam>;
 
 FuncFParam: FuncFParam = {
-  <btype: BType> <ident: Ident> => FuncFParam { btype: btype, ident: ident, index: None },
-  <btype: BType> <ident: Ident> "[" "]" <index: ("[" <ConstExp> "]")*> => FuncFParam { btype: btype, ident: ident, index: Some(index) },
+  <btype: BType> <ident: Ident> => FuncFParam::Var(btype, ident),
+  <btype: BType> <ident: Ident> "[" "]" <index: ("[" <ConstExp> "]")*> => FuncFParam::Array(btype, ident, index),
 }
 
 // ============= Block && Stmt =============

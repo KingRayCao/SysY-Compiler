@@ -4,10 +4,11 @@ use koopa::ir::builder::{
     BasicBlockBuilder, BlockBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
 };
 use koopa::ir::entities::ValueData;
-use koopa::ir::{BasicBlock, FunctionData, Program, Value, ValueKind};
+use koopa::ir::{BasicBlock, FunctionData, Program, Type, Value, ValueKind};
 use std::collections::HashMap;
 
 // ============ Basic Block utils ============
+
 pub fn new_bb_builder<'a>(
     program: &'a mut Program,
     context: &'a mut IrContext,
@@ -160,6 +161,28 @@ pub fn get_typekind<'a>(
     value_data.ty().kind()
 }
 
+pub fn get_type(program: &Program, context: &IrContext, value: Value) -> Type {
+    Type::get(get_typekind(program, context, value).clone())
+}
+// ============ Function utils ============
+
+pub fn get_func(program: &Program, context: &IrContext, ident: &str) -> Function {
+    for (func, func_data) in program.funcs().iter() {
+        if func_data.name() == ident {
+            return func.clone();
+        }
+    }
+    panic!("Function not found: {}", ident);
+}
+
+pub fn get_func_data<'a>(
+    program: &'a Program,
+    context: &'a IrContext,
+    func: Function,
+) -> &'a FunctionData {
+    program.func(func)
+}
+
 // ============ Symbol Table ============
 
 pub struct SymbolTableStack {
@@ -253,6 +276,9 @@ impl WhileStack {
     pub fn get_top(&self) -> Option<(BasicBlock, BasicBlock)> {
         self.stack.last().cloned()
     }
+    pub fn clear(&mut self) {
+        self.stack.clear();
+    }
 }
 // ============ IrContext ============
 
@@ -266,13 +292,20 @@ pub struct IrContext {
 
 impl IrContext {
     pub fn new() -> Self {
-        IrContext {
+        let mut ret = IrContext {
             current_func: None,
             current_bb: None,
             symbol_tables: SymbolTableStack::new(),
             name_manager: NameManager::new(),
             while_stack: WhileStack::new(),
-        }
+        };
+        ret.symbol_tables.push_table(); // 全局变量表
+        ret
+    }
+    pub fn change_current_func(&mut self, func: Function) {
+        self.current_func = Some(func);
+        self.current_bb = None;
+        self.while_stack.clear();
     }
 }
 

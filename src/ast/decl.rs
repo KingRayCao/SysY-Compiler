@@ -1,5 +1,6 @@
 use super::exp::*;
 use super::stmt::*;
+use koopa::ir::Type;
 use koopa::ir::TypeKind;
 
 // ============= Function =============
@@ -13,10 +14,27 @@ pub struct FuncDef {
 }
 
 #[derive(Debug)]
-pub struct FuncFParam {
-    pub btype: BType,
-    pub ident: String,
-    pub index: Option<Vec<ConstExp>>,
+pub enum FuncFParam {
+    Var(BType, String),
+    Array(BType, String, Vec<ConstExp>),
+}
+
+impl FuncFParam {
+    pub fn to_typekind(&self) -> TypeKind {
+        match self {
+            FuncFParam::Var(btype, _) => btype.to_typekind(),
+            FuncFParam::Array(btype, _, _) => todo!(),
+        }
+    }
+    pub fn to_type(&self) -> Type {
+        Type::get(self.to_typekind())
+    }
+    pub fn get_ident(&self) -> &String {
+        match self {
+            FuncFParam::Var(_, ident) => ident,
+            FuncFParam::Array(_, ident, _) => ident,
+        }
+    }
 }
 
 // ============= Block =============
@@ -55,11 +73,14 @@ pub enum BType {
 }
 
 impl BType {
-    pub fn to_koopa_kind(&self) -> TypeKind {
+    pub fn to_typekind(&self) -> TypeKind {
         match self {
             BType::Int => TypeKind::Int32,
             BType::Void => TypeKind::Unit,
         }
+    }
+    pub fn to_type(&self) -> Type {
+        Type::get(self.to_typekind())
     }
 }
 
@@ -73,6 +94,7 @@ pub struct ConstDef {
 #[derive(Debug)]
 pub enum ConstInitVal {
     ConstExp(Box<ConstExp>),
+    ConstArray(Vec<ConstInitVal>),
 }
 
 // ---- Variable Declaration ----
@@ -99,4 +121,5 @@ pub enum VarDef {
 #[derive(Debug)]
 pub enum InitVal {
     Exp(Box<Exp>),
+    Array(Vec<InitVal>),
 }

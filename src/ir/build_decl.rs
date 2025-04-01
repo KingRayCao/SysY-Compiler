@@ -46,6 +46,9 @@ impl IrGenerator for ConstDef {
                         .symbol_tables
                         .add_const(&self.ident, TypeKind::Int32, const_init_val);
                 }
+                ConstInitVal::ConstArray(init_val_vec) => {
+                    todo!()
+                }
             }
             Ok(())
         } else {
@@ -72,6 +75,7 @@ impl IrGenerator for VarDef {
         match self {
             VarDef::VarDef { ident, index } => {
                 if index.is_empty() {
+                    // Single Variable
                     let alloc = new_value_builder(program, context).alloc(Type::get_i32());
                     add_value(program, context, alloc).unwrap();
                     set_value_name(
@@ -112,6 +116,9 @@ impl IrGenerator for VarDef {
                             add_value(program, context, store).unwrap();
                             Ok(())
                         }
+                        InitVal::Array(init_val_vec) => {
+                            todo!()
+                        }
                     }
                 } else {
                     todo!()
@@ -127,16 +134,61 @@ impl IrGenerator for FuncDef {
     type Output = Result<(), String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         // add function_data to program
-        let func_data = FunctionData::new(
+        let params_vec = self
+            .func_f_params
+            .iter()
+            .map(|func_param| {
+                (
+                    Some(format!("@{}", func_param.get_ident())),
+                    func_param.to_type(),
+                )
+            })
+            .collect();
+        let func_data = FunctionData::with_param_names(
             format!("@{}", self.ident),
-            Vec::new(),
-            Type::get(self.return_type.to_koopa_kind()),
+            params_vec,
+            self.return_type.to_type(),
         );
+
         let func = program.new_func(func_data);
-        context.current_func = Some(func);
+        context.change_current_func(func);
         // create entry block
         let entry_bb = create_bb(program, context, "%entry");
         change_current_bb(program, context, entry_bb);
+        // allocate function params to stack
+        context.symbol_tables.push_table();
+
+        let params: Vec<_> = get_func_data(program, context, func)
+            .params()
+            .iter()
+            .map(|&param| {
+                let data = get_valuedata(program, context, param);
+                let name = data.name().as_ref().unwrap().clone();
+                let tk = get_typekind(program, context, param).clone();
+                let ty = get_type(program, context, param).clone();
+                (param, name, tk, ty)
+            })
+            .collect();
+
+        for (param, param_name, param_tk, param_ty) in params {
+            let alloc_value = new_value_builder(program, context).alloc(param_ty);
+            add_value(program, context, alloc_value).unwrap();
+            set_value_name(
+                program,
+                context,
+                alloc_value,
+                &format!(
+                    "%{}_{}",
+                    &param_name[1..],
+                    context.symbol_tables.get_depth()
+                ),
+            );
+            context
+                .symbol_tables
+                .add_var(&param_name[1..], param_tk, alloc_value);
+            let store_value = new_value_builder(program, context).store(param, alloc_value);
+            add_value(program, context, store_value).unwrap();
+        }
         // compile block
         // 注意 BasicBlock和Block的区别
         self.block.build_ir(program, context)?;
@@ -154,7 +206,7 @@ impl IrGenerator for FuncDef {
             need_ret = true;
         }
         if need_ret {
-            match self.return_type.to_koopa_kind() {
+            match self.return_type.to_typekind() {
                 TypeKind::Unit => {
                     let ret = new_value_builder(program, context).ret(None);
                     add_value(program, context, ret).unwrap();
@@ -167,6 +219,7 @@ impl IrGenerator for FuncDef {
                 _ => todo!(),
             }
         }
+        context.symbol_tables.pop_table();
         Ok(())
     }
 }
@@ -175,17 +228,18 @@ impl IrGenerator for FuncDef {
 
 impl IrGenerator for Block {
     type Output = Result<(), String>;
+    // 确保调用前使用了push_table，调用后使用了pop_table
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
-        context.symbol_tables.push_table();
         for item in self.block_items.iter() {
             match item {
-                BlockItem::Decl(decl) => decl.build_ir(program, context)?,
+                BlockItem::Decl(decl) => {
+                    decl.build_ir(program, context)?;
+                }
                 BlockItem::Stmt(stmt) => {
                     stmt.build_ir(program, context)?;
                 }
             }
         }
-        context.symbol_tables.pop_table();
         Ok(())
     }
 }
