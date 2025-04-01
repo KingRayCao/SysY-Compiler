@@ -158,7 +158,8 @@ impl IrGenerator for VarDef {
                         // Single Variable
                         match init_val.as_ref() {
                             InitVal::Exp(exp) => {
-                                let const_init_val = exp.get_const_value(context).unwrap();
+                                // let const_init_val = exp.get_const_value(context).unwrap();
+                                let const_init_val = 0;
                                 let val = program.new_value().integer(const_init_val);
                                 let alloc = program.new_value().global_alloc(val);
                                 program.set_value_name(alloc, Some(format!("@{}_0", ident)));
