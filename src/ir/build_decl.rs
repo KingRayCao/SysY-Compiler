@@ -139,7 +139,7 @@ impl IrGenerator for VarDef {
                         // Single Variable
                         let val_0 = program.new_value().integer(0);
                         let alloc = program.new_value().global_alloc(val_0);
-                        program.set_value_name(alloc, Some(format!("@{}", ident)));
+                        program.set_value_name(alloc, Some(format!("@{}_0", ident)));
                         context
                             .symbol_tables
                             .add_var(&ident, TypeKind::Int32, alloc);
@@ -161,7 +161,7 @@ impl IrGenerator for VarDef {
                                 let const_init_val = exp.get_const_value(context).unwrap();
                                 let val = program.new_value().integer(const_init_val);
                                 let alloc = program.new_value().global_alloc(val);
-                                program.set_value_name(alloc, Some(format!("@{}", ident)));
+                                program.set_value_name(alloc, Some(format!("@{}_0", ident)));
                                 context
                                     .symbol_tables
                                     .add_var(&ident, TypeKind::Int32, alloc);

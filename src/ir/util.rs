@@ -287,7 +287,7 @@ impl SymbolTableStack {
     pub fn get_symbol(&self, name: &str) -> (Option<&SymbolTableEntry>, usize) {
         for (i, table) in self.tables.iter().rev().enumerate() {
             if let Some(entry) = table.get(name) {
-                return (Some(entry), self.tables.len() - i);
+                return (Some(entry), self.tables.len() - i - 1);
             }
         }
         (None, 0)
@@ -305,7 +305,7 @@ impl SymbolTableStack {
         self.add_symbol(name, SymbolTableEntry::Const(tk, value));
     }
     pub fn get_depth(&self) -> usize {
-        self.tables.len()
+        self.tables.len() - 1
     }
 }
 
