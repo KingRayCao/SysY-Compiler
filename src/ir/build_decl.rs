@@ -192,7 +192,7 @@ impl IrGenerator for FuncDef {
             .iter()
             .map(|func_param| {
                 (
-                    Some(format!("@{}", func_param.get_ident())),
+                    Some(format!("@{}_1", func_param.get_ident())),
                     func_param.to_type(),
                 )
             })
@@ -230,15 +230,13 @@ impl IrGenerator for FuncDef {
                 program,
                 context,
                 alloc_value,
-                &format!(
-                    "%{}_{}",
-                    &param_name[1..],
-                    context.symbol_tables.get_depth()
-                ),
+                &format!("%{}", &param_name[1..],),
             );
-            context
-                .symbol_tables
-                .add_var(&param_name[1..], param_tk, alloc_value);
+            context.symbol_tables.add_var(
+                &param_name[1..param_name.len() - 2],
+                param_tk,
+                alloc_value,
+            );
             let store_value = new_value_builder(program, context).store(param, alloc_value);
             add_value(program, context, store_value).unwrap();
         }
