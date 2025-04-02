@@ -108,11 +108,7 @@ pub fn create_bb<'a>(
 
 pub fn new_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, name: &str) -> BasicBlock {
     let func_data = program.func_mut(context.current_func.unwrap());
-    let name = if name == "%entry" {
-        name.to_string()
-    } else {
-        context.name_manager.get_name(name)
-    };
+    let name = context.name_manager.get_name(name);
     func_data.dfg_mut().new_bb().basic_block(Some(name))
 }
 

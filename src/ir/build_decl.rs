@@ -230,7 +230,7 @@ impl IrGenerator for FuncDef {
                 program,
                 context,
                 alloc_value,
-                &format!("%{}", &param_name[1..],),
+                &format!("%{}_param", &param_name[1..],),
             );
             context.symbol_tables.add_var(
                 &param_name[1..param_name.len() - 2],
