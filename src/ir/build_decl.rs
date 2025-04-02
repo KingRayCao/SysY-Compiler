@@ -42,7 +42,7 @@ impl IrGenerator for ConstDef {
         if self.index.is_empty() {
             match self.const_init_val.as_ref() {
                 ConstInitVal::ConstExp(exp) => {
-                    let const_init_val = exp.get_const_value(context).unwrap();
+                    let const_init_val = exp.get_const_value(context).get_or_exit(11);
                     context
                         .symbol_tables
                         .add_const(&self.ident, TypeKind::Int32, const_init_val);
@@ -80,7 +80,7 @@ impl IrGenerator for VarDef {
                     if index.is_empty() {
                         // Single Variable
                         let alloc = new_value_builder(program, context).alloc(Type::get_i32());
-                        add_value(program, context, alloc).unwrap();
+                        add_value(program, context, alloc).get_or_exit(12);
                         set_value_name(
                             program,
                             context,
@@ -103,7 +103,7 @@ impl IrGenerator for VarDef {
                 } => {
                     if index.is_empty() {
                         let alloc = new_value_builder(program, context).alloc(Type::get_i32());
-                        add_value(program, context, alloc).unwrap();
+                        add_value(program, context, alloc).get_or_exit(13);
                         set_value_name(
                             program,
                             context,
@@ -115,10 +115,10 @@ impl IrGenerator for VarDef {
                             .add_var(&ident, TypeKind::Int32, alloc);
                         match init_val.as_ref() {
                             InitVal::Exp(exp) => {
-                                let exp_val = exp.build_ir(program, context).unwrap();
+                                let exp_val = exp.build_ir(program, context).get_or_exit(14);
                                 let store =
                                     new_value_builder(program, context).store(exp_val, alloc);
-                                add_value(program, context, store).unwrap();
+                                add_value(program, context, store).get_or_exit(15);
                                 return Ok(());
                             }
                             InitVal::Array(init_val_vec) => {
@@ -158,8 +158,7 @@ impl IrGenerator for VarDef {
                         // Single Variable
                         match init_val.as_ref() {
                             InitVal::Exp(exp) => {
-                                // let const_init_val = exp.get_const_value(context).unwrap();
-                                let const_init_val = 0;
+                                let const_init_val = exp.get_const_value(context).get_or_exit(16);
                                 let val = program.new_value().integer(const_init_val);
                                 let alloc = program.new_value().global_alloc(val);
                                 program.set_value_name(alloc, Some(format!("@{}_0", ident)));
@@ -217,7 +216,7 @@ impl IrGenerator for FuncDef {
             .iter()
             .map(|&param| {
                 let data = get_valuedata(program, context, param);
-                let name = data.name().as_ref().unwrap().clone();
+                let name = data.name().as_ref().get_or_exit(17).clone();
                 let tk = get_typekind(program, context, param).clone();
                 let ty = get_type(program, context, param).clone();
                 (param, name, tk, ty)
@@ -226,7 +225,7 @@ impl IrGenerator for FuncDef {
 
         for (param, param_name, param_tk, param_ty) in params {
             let alloc_value = new_value_builder(program, context).alloc(param_ty);
-            add_value(program, context, alloc_value).unwrap();
+            add_value(program, context, alloc_value).get_or_exit(18);
             set_value_name(
                 program,
                 context,
@@ -241,7 +240,7 @@ impl IrGenerator for FuncDef {
                 .symbol_tables
                 .add_var(&param_name[1..], param_tk, alloc_value);
             let store_value = new_value_builder(program, context).store(param, alloc_value);
-            add_value(program, context, store_value).unwrap();
+            add_value(program, context, store_value).get_or_exit(19);
         }
         // compile block
         // 注意 BasicBlock和Block的区别
@@ -263,12 +262,12 @@ impl IrGenerator for FuncDef {
             match self.return_type.to_typekind() {
                 TypeKind::Unit => {
                     let ret = new_value_builder(program, context).ret(None);
-                    add_value(program, context, ret).unwrap();
+                    add_value(program, context, ret).get_or_exit(20);
                 }
                 TypeKind::Int32 => {
                     let val_0 = new_value_builder(program, context).integer(0);
                     let ret = new_value_builder(program, context).ret(Some(val_0));
-                    add_value(program, context, ret).unwrap();
+                    add_value(program, context, ret).get_or_exit(21);
                 }
                 _ => todo!(),
             }

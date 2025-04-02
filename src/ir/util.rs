@@ -93,7 +93,7 @@ pub fn new_bb_builder<'a>(
     program: &'a mut Program,
     context: &'a mut IrContext,
 ) -> BlockBuilder<'a> {
-    let func_data = program.func_mut(context.current_func.unwrap());
+    let func_data = program.func_mut(context.current_func.get_or_exit(111));
     func_data.dfg_mut().new_bb()
 }
 
@@ -107,7 +107,7 @@ pub fn create_bb<'a>(
 }
 
 pub fn new_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, name: &str) -> BasicBlock {
-    let func_data = program.func_mut(context.current_func.unwrap());
+    let func_data = program.func_mut(context.current_func.get_or_exit(112));
     let name = if name == "%entry" {
         name.to_string()
     } else {
@@ -121,16 +121,22 @@ pub fn insert_bb<'a>(
     context: &'a mut IrContext,
     bb: BasicBlock,
 ) -> BasicBlock {
-    let func_data = program.func_mut(context.current_func.unwrap());
-    func_data.layout_mut().bbs_mut().push_key_back(bb).unwrap();
+    let func_data = program.func_mut(context.current_func.get_or_exit(113));
+    func_data
+        .layout_mut()
+        .bbs_mut()
+        .push_key_back(bb)
+        .get_or_exit(114);
     bb
 }
 
 pub fn change_current_bb<'a>(program: &'a mut Program, context: &'a mut IrContext, bb: BasicBlock) {
     // 检查前一个bb是否closed，如果没有close，则需要跳转到新bb
-    if context.current_bb.is_some() && !bb_closed(program, context, context.current_bb.unwrap()) {
+    if context.current_bb.is_some()
+        && !bb_closed(program, context, context.current_bb.get_or_exit(115))
+    {
         let jump_val = new_value_builder(program, context).jump(bb);
-        add_value(program, context, jump_val).unwrap();
+        add_value(program, context, jump_val).get_or_exit(116);
     }
     context.current_bb = Some(bb);
 }
@@ -139,10 +145,10 @@ pub fn get_bb_last_value<'a>(
     program: &'a mut Program,
     context: &'a mut IrContext,
 ) -> Option<Value> {
-    let func_data = program.func_mut(context.current_func.unwrap());
+    let func_data = program.func_mut(context.current_func.get_or_exit(117));
     func_data
         .layout_mut()
-        .bb_mut(context.current_bb.unwrap())
+        .bb_mut(context.current_bb.get_or_exit(118))
         .insts_mut()
         .keys()
         .last()
@@ -150,7 +156,7 @@ pub fn get_bb_last_value<'a>(
 }
 
 pub fn bb_closed(program: &Program, context: &IrContext, bb: BasicBlock) -> bool {
-    let func_data = program.func(context.current_func.unwrap());
+    let func_data = program.func(context.current_func.get_or_exit(119));
     let last_value = func_data.layout().bbs()[&bb]
         .insts()
         .keys()
@@ -176,7 +182,7 @@ pub fn new_value_builder<'a>(
     program: &'a mut Program,
     context: &'a mut IrContext,
 ) -> LocalBuilder<'a> {
-    let func_data = program.func_mut(context.current_func.unwrap());
+    let func_data = program.func_mut(context.current_func.get_or_exit(120));
     func_data.dfg_mut().new_value()
 }
 
@@ -185,7 +191,7 @@ pub fn add_value(
     context: &mut IrContext,
     value: Value,
 ) -> Result<(), String> {
-    let mut bb = context.current_bb.unwrap();
+    let mut bb = context.current_bb.get_or_exit(121);
     let bb_last_value = get_bb_last_value(program, context);
     // 如果当前bb已经closed，则新建bb
     if bb_closed(program, context, bb) {
@@ -193,7 +199,7 @@ pub fn add_value(
         bb = insert_bb(program, context, new_bb);
         change_current_bb(program, context, bb);
     }
-    let func_data = program.func_mut(context.current_func.unwrap());
+    let func_data = program.func_mut(context.current_func.get_or_exit(122));
     let insert_ok = func_data
         .layout_mut()
         .bb_mut(bb)
@@ -210,7 +216,7 @@ pub fn get_valuedata<'a>(
     context: &'a IrContext,
     value: Value,
 ) -> &'a ValueData {
-    let func_data = program.func(context.current_func.unwrap());
+    let func_data = program.func(context.current_func.get_or_exit(123));
     func_data.dfg().value(value)
 }
 pub fn set_value_name<'a>(
@@ -219,7 +225,7 @@ pub fn set_value_name<'a>(
     value: Value,
     name: &str,
 ) {
-    let func_data = program.func_mut(context.current_func.unwrap());
+    let func_data = program.func_mut(context.current_func.get_or_exit(124));
     func_data
         .dfg_mut()
         .set_value_name(value, Some(name.to_string()));
@@ -252,7 +258,8 @@ pub fn get_func(program: &Program, context: &IrContext, ident: &str) -> Function
             return func.clone();
         }
     }
-    panic!("Function not found: {}", ident);
+    // panic!("Function not found: {}", ident);
+    std::process::exit(171);
 }
 
 pub fn get_func_data<'a>(
@@ -295,7 +302,7 @@ impl SymbolTableStack {
     fn add_symbol(&mut self, name: &str, entry: SymbolTableEntry) {
         self.tables
             .last_mut()
-            .unwrap()
+            .get_or_exit(125)
             .insert(name.to_string(), entry);
     }
     pub fn add_var(&mut self, name: &str, tk: TypeKind, value: Value) {
@@ -326,7 +333,7 @@ impl NameManager {
         if !self.name_map.contains_key(name) {
             self.name_map.insert(name.to_string(), 0);
         }
-        let count = self.name_map.get_mut(name).unwrap();
+        let count = self.name_map.get_mut(name).get_or_exit(126);
         *count += 1;
         let new_name = format!("{}_{}", name, count);
         new_name
@@ -402,4 +409,23 @@ pub fn print_value_data(value_data: &ValueData) {
     println!("kind: {:?}", value_data.kind());
     println!("type: {:?}", value_data.ty());
     println!("size: {:?}", value_data.ty().size());
+}
+
+pub trait ExitOnError {
+    type Output;
+    fn get_or_exit(self, code: i32) -> Self::Output;
+}
+
+impl<M, N> ExitOnError for Result<M, N> {
+    type Output = M;
+    fn get_or_exit(self, code: i32) -> Self::Output {
+        self.unwrap_or_else(|_| std::process::exit(code))
+    }
+}
+
+impl<T> ExitOnError for Option<T> {
+    type Output = T;
+    fn get_or_exit(self, code: i32) -> Self::Output {
+        self.unwrap_or_else(|| std::process::exit(code))
+    }
 }

@@ -1,3 +1,4 @@
+use super::util::ExitOnError;
 use super::{IrContext, SymbolTableEntry};
 use crate::ast::exp::*;
 
@@ -28,7 +29,7 @@ impl ConstEval for UnaryExp {
         match self {
             UnaryExp::PrimaryExp(p) => p.get_const_value(context),
             UnaryExp::UnaryExp(op, e) => {
-                let val = e.get_const_value(context).unwrap();
+                let val = e.get_const_value(context).get_or_exit(51);
                 match op {
                     UnaryOp::Plus => Ok(val),
                     UnaryOp::Minus => Ok(-val),
@@ -45,8 +46,8 @@ impl ConstEval for MulExp {
         match self {
             MulExp::UnaryExp(e) => e.get_const_value(context),
             MulExp::MulExp(e, op, u) => {
-                let val = e.get_const_value(context).unwrap();
-                let uval = u.get_const_value(context).unwrap();
+                let val = e.get_const_value(context).get_or_exit(52);
+                let uval = u.get_const_value(context).get_or_exit(53);
                 match op {
                     MulOp::Mul => Ok(val * uval),
                     MulOp::Div => Ok(val / uval),
@@ -62,8 +63,8 @@ impl ConstEval for AddExp {
         match self {
             AddExp::MulExp(e) => e.get_const_value(context),
             AddExp::AddExp(e, op, m) => {
-                let val = e.get_const_value(context).unwrap();
-                let mval = m.get_const_value(context).unwrap();
+                let val = e.get_const_value(context).get_or_exit(54);
+                let mval = m.get_const_value(context).get_or_exit(55);
                 match op {
                     AddOp::Add => Ok(val + mval),
                     AddOp::Sub => Ok(val - mval),
@@ -78,8 +79,8 @@ impl ConstEval for RelExp {
         match self {
             RelExp::AddExp(e) => e.get_const_value(context),
             RelExp::RelExp(e, op, a) => {
-                let val = e.get_const_value(context).unwrap();
-                let aval = a.get_const_value(context).unwrap();
+                let val = e.get_const_value(context).get_or_exit(56);
+                let aval = a.get_const_value(context).get_or_exit(57);
                 match op {
                     RelOp::Lt => Ok(if val < aval { 1 } else { 0 }),
                     RelOp::Le => Ok(if val <= aval { 1 } else { 0 }),
@@ -96,8 +97,8 @@ impl ConstEval for EqExp {
         match self {
             EqExp::RelExp(e) => e.get_const_value(context),
             EqExp::EqExp(e, op, r) => {
-                let val = e.get_const_value(context).unwrap();
-                let rval = r.get_const_value(context).unwrap();
+                let val = e.get_const_value(context).get_or_exit(58);
+                let rval = r.get_const_value(context).get_or_exit(59);
                 match op {
                     EqOp::Eq => Ok(if val == rval { 1 } else { 0 }),
                     EqOp::Ne => Ok(if val != rval { 1 } else { 0 }),
@@ -112,8 +113,8 @@ impl ConstEval for LAndExp {
         match self {
             LAndExp::EqExp(e) => e.get_const_value(context),
             LAndExp::LAndExp(e, eq) => {
-                let val = e.get_const_value(context).unwrap();
-                let eqval = eq.get_const_value(context).unwrap();
+                let val = e.get_const_value(context).get_or_exit(60);
+                let eqval = eq.get_const_value(context).get_or_exit(61);
                 if val != 0 && eqval != 0 {
                     Ok(1)
                 } else {
@@ -129,8 +130,8 @@ impl ConstEval for LOrExp {
         match self {
             LOrExp::LAndExp(e) => e.get_const_value(context),
             LOrExp::LOrExp(e, land) => {
-                let val = e.get_const_value(context).unwrap();
-                let landval = land.get_const_value(context).unwrap();
+                let val = e.get_const_value(context).get_or_exit(62);
+                let landval = land.get_const_value(context).get_or_exit(63);
                 if val != 0 || landval != 0 {
                     Ok(1)
                 } else {

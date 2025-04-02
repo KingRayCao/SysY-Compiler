@@ -17,7 +17,7 @@ impl IrGenerator for CompUnit {
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         init_lib_decl(program, context);
         for item in &self.items {
-            item.build_ir(program, context).unwrap();
+            item.build_ir(program, context).get_or_exit(7);
         }
         Ok(())
     }
@@ -41,6 +41,6 @@ impl IrGenerator for CompItem {
 pub fn compile(ast: &CompUnit) -> koopa::ir::Program {
     let mut program = Program::new();
     let mut context = IrContext::new();
-    ast.build_ir(&mut program, &mut context).unwrap();
+    ast.build_ir(&mut program, &mut context).get_or_exit(8);
     program
 }

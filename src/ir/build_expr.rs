@@ -23,7 +23,7 @@ impl IrGenerator for LVal {
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         if self.index.is_empty() {
             let (entry, _) = context.symbol_tables.get_symbol(&self.ident);
-            let entry = entry.unwrap();
+            let entry = entry.get_or_exit(31);
             match entry {
                 SymbolTableEntry::Var(_, value) => Ok(LValValue::Var(*value)),
                 SymbolTableEntry::Const(_, value) => {
@@ -64,7 +64,7 @@ impl IrGenerator for UnaryExp {
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         match self {
             UnaryExp::UnaryExp(op, exp) => {
-                let exp_val = exp.build_ir(program, context).unwrap();
+                let exp_val = exp.build_ir(program, context).get_or_exit(32);
                 let value = match op {
                     UnaryOp::Plus => exp_val,
                     UnaryOp::Minus => {
@@ -93,7 +93,7 @@ impl IrGenerator for UnaryExp {
             UnaryExp::FuncCallExp(func_name, func_r_params) => {
                 let params_val = func_r_params
                     .iter()
-                    .map(|exp| exp.build_ir(program, context).unwrap())
+                    .map(|exp| exp.build_ir(program, context).get_or_exit(33))
                     .collect();
                 let func_name = format!("@{}", func_name);
                 let callee = get_func(program, context, &func_name);

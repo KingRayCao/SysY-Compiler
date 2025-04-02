@@ -106,13 +106,13 @@ impl IrGenerator for Stmt {
                 Ok(())
             }
             Stmt::BreakStmt => {
-                let (while_bb, end_bb) = context.while_stack.get_top().unwrap();
+                let (while_bb, end_bb) = context.while_stack.get_top().get_or_exit(41);
                 let break_jump = new_value_builder(program, context).jump(end_bb);
                 add_value(program, context, break_jump)?;
                 Ok(())
             }
             Stmt::ContinueStmt => {
-                let (while_bb, end_bb) = context.while_stack.get_top().unwrap();
+                let (while_bb, end_bb) = context.while_stack.get_top().get_or_exit(42);
                 let continue_jump = new_value_builder(program, context).jump(while_bb);
                 add_value(program, context, continue_jump)?;
                 Ok(())
