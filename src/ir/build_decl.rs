@@ -139,7 +139,7 @@ impl IrGenerator for VarDef {
                         // Single Variable
                         let val_0 = program.new_value().integer(0);
                         let alloc = program.new_value().global_alloc(val_0);
-                        program.set_value_name(alloc, Some(format!("@{}_0", ident)));
+                        // program.set_value_name(alloc, Some(format!("@{}_0", ident)));
                         context
                             .symbol_tables
                             .add_var(&ident, TypeKind::Int32, alloc);
@@ -161,7 +161,7 @@ impl IrGenerator for VarDef {
                                 let const_init_val = exp.get_const_value(context).unwrap();
                                 let val = program.new_value().integer(const_init_val);
                                 let alloc = program.new_value().global_alloc(val);
-                                program.set_value_name(alloc, Some(format!("@{}_0", ident)));
+                                // program.set_value_name(alloc, Some(format!("@{}_0", ident)));
                                 context
                                     .symbol_tables
                                     .add_var(&ident, TypeKind::Int32, alloc);
@@ -223,17 +223,18 @@ impl IrGenerator for FuncDef {
             })
             .collect();
 
-        for (param, param_name, param_tk, param_ty) in params {
+        for i in 0..params.len() {
+            let (param, param_name, param_tk, param_ty) = params[i].clone();
             let alloc_value = new_value_builder(program, context).alloc(param_ty);
             add_value(program, context, alloc_value).unwrap();
             set_value_name(
                 program,
                 context,
                 alloc_value,
-                &format!("%{}_param", &param_name[1..],),
+                &format!("%{}_param", &self.func_f_params[i].get_ident()),
             );
             context.symbol_tables.add_var(
-                &param_name[1..param_name.len() - 2],
+                &self.func_f_params[i].get_ident(),
                 param_tk,
                 alloc_value,
             );

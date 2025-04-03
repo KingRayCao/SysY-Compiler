@@ -215,10 +215,10 @@ pub fn set_value_name<'a>(
     value: Value,
     name: &str,
 ) {
-    let func_data = program.func_mut(context.current_func.unwrap());
-    func_data
-        .dfg_mut()
-        .set_value_name(value, Some(name.to_string()));
+    // let func_data = program.func_mut(context.current_func.unwrap());
+    // func_data
+    //     .dfg_mut()
+    //     .set_value_name(value, Some(name.to_string()));
 }
 pub fn get_valuekind<'a>(
     program: &'a Program,
