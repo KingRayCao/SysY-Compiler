@@ -29,11 +29,15 @@ pub fn init_lib_decl(program: &mut Program, context: &mut IrContext) {
         Type::get(TypeKind::Int32),
     );
     let func = program.new_func(func_data);
+    context
+        .func_table
+        .insert("getint".to_string(), func.clone());
 
     // getch
     let func_data =
         FunctionData::new_decl("@getch".to_string(), Vec::new(), Type::get(TypeKind::Int32));
     let func = program.new_func(func_data);
+    context.func_table.insert("getch".to_string(), func.clone());
 
     // getarray
     let func_data = FunctionData::new_decl(
@@ -42,6 +46,9 @@ pub fn init_lib_decl(program: &mut Program, context: &mut IrContext) {
         Type::get(TypeKind::Int32),
     );
     let func = program.new_func(func_data);
+    context
+        .func_table
+        .insert("getarray".to_string(), func.clone());
 
     // putint
     let func_data = FunctionData::new_decl(
@@ -50,6 +57,9 @@ pub fn init_lib_decl(program: &mut Program, context: &mut IrContext) {
         Type::get(TypeKind::Unit),
     );
     let func = program.new_func(func_data);
+    context
+        .func_table
+        .insert("putint".to_string(), func.clone());
 
     // putch
     let func_data = FunctionData::new_decl(
@@ -58,6 +68,7 @@ pub fn init_lib_decl(program: &mut Program, context: &mut IrContext) {
         Type::get(TypeKind::Unit),
     );
     let func = program.new_func(func_data);
+    context.func_table.insert("putch".to_string(), func.clone());
 
     // putarray
     let func_data = FunctionData::new_decl(
@@ -69,6 +80,9 @@ pub fn init_lib_decl(program: &mut Program, context: &mut IrContext) {
         Type::get(TypeKind::Unit),
     );
     let func = program.new_func(func_data);
+    context
+        .func_table
+        .insert("putarray".to_string(), func.clone());
 
     // starttime
     let func_data = FunctionData::new_decl(
@@ -77,6 +91,9 @@ pub fn init_lib_decl(program: &mut Program, context: &mut IrContext) {
         Type::get(TypeKind::Unit),
     );
     let func = program.new_func(func_data);
+    context
+        .func_table
+        .insert("starttime".to_string(), func.clone());
 
     // stoptime
     let func_data = FunctionData::new_decl(
@@ -85,6 +102,9 @@ pub fn init_lib_decl(program: &mut Program, context: &mut IrContext) {
         Type::get(TypeKind::Unit),
     );
     let func = program.new_func(func_data);
+    context
+        .func_table
+        .insert("stoptime".to_string(), func.clone());
 }
 
 // ============ Basic Block utils ============
@@ -209,17 +229,7 @@ pub fn get_valuedata<'a>(
     let func_data = program.func(context.current_func.unwrap());
     func_data.dfg().value(value)
 }
-pub fn set_value_name<'a>(
-    program: &'a mut Program,
-    context: &'a mut IrContext,
-    value: Value,
-    name: &str,
-) {
-    // let func_data = program.func_mut(context.current_func.unwrap());
-    // func_data
-    //     .dfg_mut()
-    //     .set_value_name(value, Some(name.to_string()));
-}
+
 pub fn get_valuekind<'a>(
     program: &'a Program,
     context: &'a IrContext,
@@ -243,12 +253,7 @@ pub fn get_type(program: &Program, context: &IrContext, value: Value) -> Type {
 // ============ Function utils ============
 
 pub fn get_func(program: &Program, context: &IrContext, ident: &str) -> Function {
-    for (func, func_data) in program.funcs().iter() {
-        if func_data.name() == ident {
-            return func.clone();
-        }
-    }
-    panic!("Function not found: {}", ident);
+    context.func_table.get(ident).unwrap().clone()
 }
 
 pub fn get_func_data<'a>(
@@ -362,6 +367,7 @@ pub struct IrContext {
     pub current_func: Option<Function>,
     pub current_bb: Option<BasicBlock>,
     pub symbol_tables: SymbolTableStack,
+    pub func_table: HashMap<String, Function>,
     pub name_manager: NameManager,
     pub while_stack: WhileStack,
     pub is_global: bool,
@@ -373,6 +379,7 @@ impl IrContext {
             current_func: None,
             current_bb: None,
             symbol_tables: SymbolTableStack::new(),
+            func_table: HashMap::new(),
             name_manager: NameManager::new(),
             while_stack: WhileStack::new(),
             is_global: true,

@@ -95,7 +95,6 @@ impl IrGenerator for UnaryExp {
                     .iter()
                     .map(|exp| exp.build_ir(program, context).unwrap())
                     .collect();
-                let func_name = format!("@{}", func_name);
                 let callee = get_func(program, context, &func_name);
                 let call_val = new_value_builder(program, context).call(callee, params_val);
                 add_value(program, context, call_val)?;

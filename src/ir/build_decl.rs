@@ -81,12 +81,6 @@ impl IrGenerator for VarDef {
                         // Single Variable
                         let alloc = new_value_builder(program, context).alloc(Type::get_i32());
                         add_value(program, context, alloc).unwrap();
-                        set_value_name(
-                            program,
-                            context,
-                            alloc,
-                            format!("@{}_{}", ident, context.symbol_tables.get_depth()).as_str(),
-                        );
                         context
                             .symbol_tables
                             .add_var(&ident, TypeKind::Int32, alloc);
@@ -104,12 +98,6 @@ impl IrGenerator for VarDef {
                     if index.is_empty() {
                         let alloc = new_value_builder(program, context).alloc(Type::get_i32());
                         add_value(program, context, alloc).unwrap();
-                        set_value_name(
-                            program,
-                            context,
-                            alloc,
-                            format!("@{}_{}", ident, context.symbol_tables.get_depth()).as_str(),
-                        );
                         context
                             .symbol_tables
                             .add_var(&ident, TypeKind::Int32, alloc);
@@ -139,7 +127,6 @@ impl IrGenerator for VarDef {
                         // Single Variable
                         let val_0 = program.new_value().integer(0);
                         let alloc = program.new_value().global_alloc(val_0);
-                        // program.set_value_name(alloc, Some(format!("@{}_0", ident)));
                         context
                             .symbol_tables
                             .add_var(&ident, TypeKind::Int32, alloc);
@@ -161,7 +148,6 @@ impl IrGenerator for VarDef {
                                 let const_init_val = exp.get_const_value(context).unwrap();
                                 let val = program.new_value().integer(const_init_val);
                                 let alloc = program.new_value().global_alloc(val);
-                                // program.set_value_name(alloc, Some(format!("@{}_0", ident)));
                                 context
                                     .symbol_tables
                                     .add_var(&ident, TypeKind::Int32, alloc);
@@ -190,20 +176,15 @@ impl IrGenerator for FuncDef {
         let params_vec = self
             .func_f_params
             .iter()
-            .map(|func_param| {
-                (
-                    Some(format!("@{}_1", func_param.get_ident())),
-                    func_param.to_type(),
-                )
-            })
+            .map(|func_param| func_param.to_type())
             .collect();
-        let func_data = FunctionData::with_param_names(
+        let func_data = FunctionData::new(
             format!("@{}", self.ident),
             params_vec,
             self.return_type.to_type(),
         );
-
         let func = program.new_func(func_data);
+        context.func_table.insert(self.ident.clone(), func.clone());
         context.change_current_func(func);
         // create entry block
         let entry_bb = create_bb(program, context, "%entry");
@@ -215,24 +196,16 @@ impl IrGenerator for FuncDef {
             .params()
             .iter()
             .map(|&param| {
-                let data = get_valuedata(program, context, param);
-                let name = data.name().as_ref().unwrap().clone();
                 let tk = get_typekind(program, context, param).clone();
                 let ty = get_type(program, context, param).clone();
-                (param, name, tk, ty)
+                (param, tk, ty)
             })
             .collect();
 
         for i in 0..params.len() {
-            let (param, param_name, param_tk, param_ty) = params[i].clone();
+            let (param, param_tk, param_ty) = params[i].clone();
             let alloc_value = new_value_builder(program, context).alloc(param_ty);
             add_value(program, context, alloc_value).unwrap();
-            set_value_name(
-                program,
-                context,
-                alloc_value,
-                &format!("%{}_param", &self.func_f_params[i].get_ident()),
-            );
             context.symbol_tables.add_var(
                 &self.func_f_params[i].get_ident(),
                 param_tk,
