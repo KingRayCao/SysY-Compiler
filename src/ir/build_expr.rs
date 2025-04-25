@@ -1,7 +1,7 @@
 use super::util::*;
 use super::*;
 use crate::ast::exp::*;
-use koopa::ir::builder::{LocalInstBuilder, ValueBuilder};
+use koopa::ir::builder::{EntityInfoQuerier, LocalInstBuilder, ValueBuilder};
 use koopa::ir::{BinaryOp, Type, Value};
 
 impl IrGenerator for Exp {
@@ -16,7 +16,8 @@ impl IrGenerator for Exp {
 pub enum LValValue {
     Var(Value),
     Const(Value),
-    ArrayElem(Value),
+    ArrayElem(Value, Vec<usize>, Vec<Value>),
+    ArrayParamElem(Value, Vec<usize>, Vec<Value>),
 }
 
 impl IrGenerator for LVal {
@@ -37,8 +38,17 @@ impl IrGenerator for LVal {
                     let index_val = self.index[i].build_ir(program, context)?;
                     index.push(index_val);
                 }
-                let elem_val = get_array_elem(program, context, array_value, index);
-                Ok(LValValue::ArrayElem(elem_val))
+                Ok(LValValue::ArrayElem(value, size, index))
+            }
+            SymbolTableEntry::ArrayParam(_, value, size) => {
+                let mut index: Vec<Value> = Vec::new();
+                for i in 0..self.index.len() {
+                    let index_val = self.index[i].build_ir(program, context)?;
+                    index.push(index_val);
+                }
+                let array_value = new_value_builder(program, context).load(value);
+                add_value(program, context, array_value)?;
+                Ok(LValValue::ArrayParamElem(array_value, size, index))
             }
         }
     }
@@ -58,9 +68,13 @@ impl IrGenerator for PrimaryExp {
                         Ok(load)
                     }
                     LValValue::Const(value) => Ok(value),
-                    LValValue::ArrayElem(value) => {
-                        let load = new_value_builder(program, context).load(value);
-                        add_value(program, context, load)?;
+                    LValValue::ArrayElem(array_value, size, index) => {
+                        let load = get_array_elem(program, context, array_value, &size, &index);
+                        Ok(load)
+                    }
+                    LValValue::ArrayParamElem(array_value, size, index) => {
+                        let load =
+                            get_array_param_elem(program, context, array_value, &size, &index);
                         Ok(load)
                     }
                 }
@@ -102,11 +116,15 @@ impl IrGenerator for UnaryExp {
                 Ok(value)
             }
             UnaryExp::FuncCallExp(func_name, func_r_params) => {
-                let params_val = func_r_params
+                let params_val: Vec<Value> = func_r_params
                     .iter()
                     .map(|exp| exp.build_ir(program, context).unwrap())
                     .collect();
                 let callee = get_func(program, context, &func_name);
+                println!("call func: {}", func_name,);
+                for param in params_val.iter() {
+                    print_value(program, context, param.clone());
+                }
                 let call_val = new_value_builder(program, context).call(callee, params_val);
                 add_value(program, context, call_val)?;
                 Ok(call_val)

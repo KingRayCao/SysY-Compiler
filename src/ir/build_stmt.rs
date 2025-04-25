@@ -18,9 +18,19 @@ impl IrGenerator for Stmt {
                         Ok(())
                     }
                     LValValue::Const(_) => Err("Assign to constant".to_string()),
-                    LValValue::ArrayElem(value) => {
+                    LValValue::ArrayElem(array_value, size, index) => {
                         let exp_val = exp.build_ir(program, context)?;
-                        let store = new_value_builder(program, context).store(exp_val, value);
+                        let elem_addr =
+                            get_array_elem_addr(program, context, array_value, &size, &index);
+                        let store = new_value_builder(program, context).store(exp_val, elem_addr);
+                        add_value(program, context, store)?;
+                        Ok(())
+                    }
+                    LValValue::ArrayParamElem(array_value, size, index) => {
+                        let exp_val = exp.build_ir(program, context)?;
+                        let elem_addr =
+                            get_array_param_elem_addr(program, context, array_value, &size, &index);
+                        let store = new_value_builder(program, context).store(exp_val, elem_addr);
                         add_value(program, context, store)?;
                         Ok(())
                     }
@@ -123,11 +133,17 @@ impl IrGenerator for Stmt {
                 add_value(program, context, continue_jump)?;
                 Ok(())
             }
-            Stmt::ReturnStmt(exp) => {
-                let ret_val = exp.build_ir(program, context)?;
-                let ret = new_value_builder(program, context).ret(Some(ret_val));
-                add_value(program, context, ret)?;
-                Ok(())
+            Stmt::ReturnStmt(ret_exp) => {
+                if let Some(exp) = ret_exp.as_ref() {
+                    let ret_val = exp.build_ir(program, context)?;
+                    let ret = new_value_builder(program, context).ret(Some(ret_val));
+                    add_value(program, context, ret)?;
+                    Ok(())
+                } else {
+                    let ret_value = new_value_builder(program, context).ret(None);
+                    add_value(program, context, ret_value)?;
+                    Ok(())
+                }
             }
         }
     }

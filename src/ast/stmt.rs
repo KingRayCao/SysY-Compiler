@@ -8,5 +8,5 @@ pub enum Stmt {
     WhileStmt(Box<Exp>, Box<Stmt>),
     BreakStmt,
     ContinueStmt,
-    ReturnStmt(Box<Exp>),
+    ReturnStmt(Box<Option<Exp>>),
 }

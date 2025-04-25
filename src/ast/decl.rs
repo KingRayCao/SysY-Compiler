@@ -20,19 +20,16 @@ pub enum FuncFParam {
 }
 
 impl FuncFParam {
-    pub fn to_typekind(&self) -> TypeKind {
-        match self {
-            FuncFParam::Var(btype, _) => btype.to_typekind(),
-            FuncFParam::Array(btype, _, _) => todo!(),
-        }
-    }
-    pub fn to_type(&self) -> Type {
-        Type::get(self.to_typekind())
-    }
     pub fn get_ident(&self) -> &String {
         match self {
             FuncFParam::Var(_, ident) => ident,
             FuncFParam::Array(_, ident, _) => ident,
+        }
+    }
+    pub fn get_size(&self) -> Option<&Vec<ConstExp>> {
+        match self {
+            FuncFParam::Var(_, _) => None,
+            FuncFParam::Array(_, _, size) => Some(size),
         }
     }
 }

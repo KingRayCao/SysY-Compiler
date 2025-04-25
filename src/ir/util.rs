@@ -278,16 +278,91 @@ pub fn get_func_data<'a>(
 
 // =========== Array utils ============
 
+// used for load
 pub fn get_array_elem(
     program: &mut Program,
     context: &mut IrContext,
     array: Value,
-    index: Vec<Value>,
+    size: &Vec<usize>,
+    index: &Vec<Value>,
 ) -> Value {
     let mut elem = array;
     for i in index.iter() {
         elem = new_value_builder(program, context).get_elem_ptr(elem, *i);
         add_value(program, context, elem).unwrap();
+    }
+    if size.len() == index.len() {
+        elem = new_value_builder(program, context).load(elem);
+        add_value(program, context, elem).unwrap();
+    } else {
+        let val_0 = const_int_value(program, context, 0);
+        elem = new_value_builder(program, context).get_elem_ptr(elem, val_0);
+        add_value(program, context, elem).unwrap();
+    }
+    elem
+}
+
+pub fn get_array_param_elem(
+    program: &mut Program,
+    context: &mut IrContext,
+    array: Value,
+    size: &Vec<usize>,
+    index: &Vec<Value>,
+) -> Value {
+    let mut elem = array;
+    if !index.is_empty() {
+        elem = new_value_builder(program, context).get_ptr(elem, index[0]);
+        add_value(program, context, elem).unwrap();
+        for i in index.iter().skip(1) {
+            elem = new_value_builder(program, context).get_elem_ptr(elem, *i);
+            add_value(program, context, elem).unwrap();
+        }
+    }
+    if size.len() + 1 == index.len() {
+        elem = new_value_builder(program, context).load(elem);
+        add_value(program, context, elem).unwrap();
+    } else {
+        if index.len() != 0 {
+            // elem point to an array
+            let val_0 = const_int_value(program, context, 0);
+            elem = new_value_builder(program, context).get_elem_ptr(elem, val_0);
+            add_value(program, context, elem).unwrap();
+        }
+    }
+    elem
+}
+
+// used for store
+pub fn get_array_elem_addr(
+    program: &mut Program,
+    context: &mut IrContext,
+    array: Value,
+    size: &Vec<usize>,
+    index: &Vec<Value>,
+) -> Value {
+    let mut elem = array;
+    for i in index.iter() {
+        elem = new_value_builder(program, context).get_elem_ptr(elem, *i);
+        add_value(program, context, elem).unwrap();
+    }
+    elem
+}
+
+pub fn get_array_param_elem_addr(
+    program: &mut Program,
+    context: &mut IrContext,
+    array: Value,
+    size: &Vec<usize>,
+    index: &Vec<Value>,
+) -> Value {
+    let mut elem = array;
+    if !index.is_empty() {
+        elem = new_value_builder(program, context).get_ptr(elem, index[0]);
+        add_value(program, context, elem).unwrap();
+        for i in index.iter().skip(1) {
+            elem = new_value_builder(program, context).get_elem_ptr(elem, *i);
+            add_value(program, context, elem).unwrap();
+        }
     }
     elem
 }
@@ -334,7 +409,7 @@ impl Array {
         result
     }
 
-    pub fn exp2size(index: &Vec<ConstExp>, context: &IrContext) -> Vec<usize> {
+    pub fn const_exp2size(index: &Vec<ConstExp>, context: &IrContext) -> Vec<usize> {
         index
             .iter()
             .map(|i| i.get_const_i32(context).unwrap() as usize)
@@ -475,7 +550,7 @@ impl Array {
                 .into_iter()
                 .map(|v| const_int_value(program, context, v as i32))
                 .collect();
-            let elem = get_array_elem(program, context, array, index);
+            let elem = get_array_elem_addr(program, context, array, &self.size, &index);
             let init_val = self.data[i];
             let store = new_value_builder(program, context).store(init_val, elem);
             add_value(program, context, store).unwrap();
@@ -506,6 +581,21 @@ impl Array {
     }
 }
 
+// ============ Function utils ============
+impl FuncFParam {
+    pub fn to_type(&self, program: &mut Program, context: &mut IrContext) -> Type {
+        match self {
+            FuncFParam::Var(btype, _) => btype.to_type(),
+            FuncFParam::Array(btype, _, size) => {
+                let size_val = size
+                    .iter()
+                    .map(|exp| exp.get_const_i32(context).unwrap() as usize)
+                    .collect();
+                Type::get_pointer(Array::size2type(&size_val))
+            }
+        }
+    }
+}
 // ============ Symbol Table ============
 
 pub struct SymbolTableStack {
@@ -517,6 +607,7 @@ pub enum SymbolTableEntry {
     Const(Type, i32),
     Var(Type, Value),
     Array(Type, Value, Vec<usize>),
+    ArrayParam(Type, Value, Vec<usize>),
 }
 
 impl SymbolTableStack {
@@ -551,6 +642,9 @@ impl SymbolTableStack {
     }
     pub fn add_array(&mut self, name: &str, ty: Type, value: Value, size: Vec<usize>) {
         self.add_symbol(name, SymbolTableEntry::Array(ty, value, size));
+    }
+    pub fn add_array_param(&mut self, name: &str, ty: Type, value: Value, size: Vec<usize>) {
+        self.add_symbol(name, SymbolTableEntry::ArrayParam(ty, value, size));
     }
     pub fn get_depth(&self) -> usize {
         self.tables.len() - 1

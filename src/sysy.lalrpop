@@ -146,7 +146,7 @@ NonIfStmt: Stmt ={
   <block: Block> => Stmt::BlockStmt (Box::new(block)),
   "break" ";" => Stmt::BreakStmt,
   "continue" ";" => Stmt::ContinueStmt,
-  "return" <exp: Exp> ";" => Stmt::ReturnStmt (Box::new(exp)),
+  "return" <exp: Exp?> ";" => Stmt::ReturnStmt (Box::new(exp)),
 } 
 
 // ---- Expression ----
