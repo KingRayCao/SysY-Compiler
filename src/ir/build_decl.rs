@@ -220,7 +220,6 @@ impl IrGenerator for FuncDef {
         let func = program.new_func(func_data);
         context.func_table.insert(self.ident.clone(), func.clone());
         context.change_current_func(func);
-        println!("add func: {}", self.ident);
         // create entry block
         let entry_bb = create_bb(program, context, "%entry");
         change_current_bb(program, context, entry_bb);

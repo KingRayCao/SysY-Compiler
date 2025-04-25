@@ -121,10 +121,6 @@ impl IrGenerator for UnaryExp {
                     .map(|exp| exp.build_ir(program, context).unwrap())
                     .collect();
                 let callee = get_func(program, context, &func_name);
-                println!("call func: {}", func_name,);
-                for param in params_val.iter() {
-                    print_value(program, context, param.clone());
-                }
                 let call_val = new_value_builder(program, context).call(callee, params_val);
                 add_value(program, context, call_val)?;
                 Ok(call_val)

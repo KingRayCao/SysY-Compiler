@@ -488,7 +488,13 @@ impl Array {
                 for v in a.iter() {
                     match v {
                         InitVal::Exp(e) => {
-                            let val = e.build_ir(program, context).unwrap();
+                            let val = if context.is_global {
+                                program
+                                    .new_value()
+                                    .integer(e.get_const_i32(context).unwrap())
+                            } else {
+                                e.build_ir(program, context).unwrap()
+                            };
                             *self.data.get_mut(*start_pos as usize).unwrap() = val;
                             *start_pos = *start_pos + 1;
                         }
