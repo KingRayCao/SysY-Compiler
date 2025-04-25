@@ -40,21 +40,34 @@ impl IrGenerator for ConstDef {
     type Output = Result<(), String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
         if self.index.is_empty() {
-            match self.const_init_val.as_ref() {
-                ConstInitVal::ConstExp(exp) => {
-                    let const_init_val = exp.get_const_value(context).unwrap();
-                    context
-                        .symbol_tables
-                        .add_const(&self.ident, TypeKind::Int32, const_init_val);
-                }
-                ConstInitVal::ConstArray(init_val_vec) => {
-                    todo!()
-                }
-            }
-            Ok(())
+            let const_init_val = self.const_init_val.get_const_i32(context).unwrap();
+            context
+                .symbol_tables
+                .add_const(&self.ident, Type::get_i32(), const_init_val);
         } else {
-            todo!()
+            let size = Array::exp2size(&self.index, context);
+            let array_type = Array::size2type(&size);
+            let const_init_array =
+                Array::get_const_init_array(program, context, &self.const_init_val, &size);
+            if !context.is_global {
+                // Local Variable
+                let alloc = new_value_builder(program, context).alloc(array_type.clone());
+                add_value(program, context, alloc).unwrap();
+                context
+                    .symbol_tables
+                    .add_array(&self.ident, array_type, alloc, size);
+                // assign
+                const_init_array.init_assign_to_array(program, context, alloc);
+            } else {
+                // Global Variable
+                let array_value = const_init_array.to_value(program, context);
+                let alloc = program.new_value().global_alloc(array_value);
+                context
+                    .symbol_tables
+                    .add_array(&self.ident, array_type, alloc, size);
+            }
         }
+        Ok(())
     }
 }
 
@@ -83,10 +96,16 @@ impl IrGenerator for VarDef {
                         add_value(program, context, alloc).unwrap();
                         context
                             .symbol_tables
-                            .add_var(&ident, TypeKind::Int32, alloc);
+                            .add_var(&ident, Type::get_i32(), alloc);
                     } else {
                         // Array Variable
-                        todo!()
+                        let size = Array::exp2size(index, context);
+                        let array_kind = Array::size2type(&size);
+                        let alloc = new_value_builder(program, context).alloc(array_kind.clone());
+                        add_value(program, context, alloc).unwrap();
+                        context
+                            .symbol_tables
+                            .add_array(&ident, array_kind, alloc, size);
                     }
                     return Ok(());
                 }
@@ -95,27 +114,36 @@ impl IrGenerator for VarDef {
                     index,
                     init_val,
                 } => {
+                    // println!("VarDef: {:?}", ident);
                     if index.is_empty() {
                         let alloc = new_value_builder(program, context).alloc(Type::get_i32());
                         add_value(program, context, alloc).unwrap();
                         context
                             .symbol_tables
-                            .add_var(&ident, TypeKind::Int32, alloc);
+                            .add_var(&ident, Type::get_i32(), alloc);
                         match init_val.as_ref() {
                             InitVal::Exp(exp) => {
                                 let exp_val = exp.build_ir(program, context).unwrap();
                                 let store =
                                     new_value_builder(program, context).store(exp_val, alloc);
                                 add_value(program, context, store).unwrap();
-                                return Ok(());
+                                Ok(())
                             }
-                            InitVal::Array(init_val_vec) => {
-                                unreachable!()
-                            }
+                            InitVal::Array(init_val_vec) => unreachable!(),
                         }
                     } else {
                         // Array Variable
-                        todo!()
+                        let size = Array::exp2size(index, context);
+                        let array_kind = Array::size2type(&size);
+                        let alloc = new_value_builder(program, context).alloc(array_kind.clone());
+                        add_value(program, context, alloc).unwrap();
+                        let init_array = Array::get_init_array(program, context, &init_val, &size);
+                        init_array.init_assign_to_array(program, context, alloc);
+                        context
+                            .symbol_tables
+                            .add_array(&ident, array_kind, alloc, size);
+
+                        Ok(())
                     }
                 }
             }
@@ -125,14 +153,21 @@ impl IrGenerator for VarDef {
                 VarDef::VarDef { ident, index } => {
                     if index.is_empty() {
                         // Single Variable
-                        let val_0 = program.new_value().integer(0);
+                        let val_0 = const_int_value(program, context, 0);
                         let alloc = program.new_value().global_alloc(val_0);
                         context
                             .symbol_tables
-                            .add_var(&ident, TypeKind::Int32, alloc);
+                            .add_var(&ident, Type::get_i32(), alloc);
                     } else {
                         // Array Variable
-                        todo!()
+                        let size = Array::exp2size(index, context);
+                        let array_type = Array::size2type(&size);
+                        let init_0_array =
+                            Array::new(program, context, &size).to_value(program, context);
+                        let alloc = program.new_value().global_alloc(init_0_array);
+                        context
+                            .symbol_tables
+                            .add_array(&ident, array_type, alloc, size);
                     }
                     Ok(())
                 }
@@ -143,22 +178,22 @@ impl IrGenerator for VarDef {
                 } => {
                     if index.is_empty() {
                         // Single Variable
-                        match init_val.as_ref() {
-                            InitVal::Exp(exp) => {
-                                let const_init_val = exp.get_const_value(context).unwrap();
-                                let val = program.new_value().integer(const_init_val);
-                                let alloc = program.new_value().global_alloc(val);
-                                context
-                                    .symbol_tables
-                                    .add_var(&ident, TypeKind::Int32, alloc);
-                            }
-                            InitVal::Array(init_val_vec) => {
-                                unreachable!()
-                            }
-                        }
+                        let const_init_val = init_val.get_const_i32(context).unwrap();
+                        let val = const_int_value(program, context, const_init_val);
+                        let alloc = program.new_value().global_alloc(val);
+                        context
+                            .symbol_tables
+                            .add_var(&ident, Type::get_i32(), alloc);
                     } else {
                         // Array Variable
-                        todo!()
+                        let size = Array::exp2size(index, context);
+                        let array_type = Array::size2type(&size);
+                        let init_array = Array::get_init_array(program, context, &init_val, &size);
+                        let init_array_value = init_array.to_value(program, context);
+                        let alloc = program.new_value().global_alloc(init_array_value);
+                        context
+                            .symbol_tables
+                            .add_array(&ident, array_type, alloc, size);
                     }
                     Ok(())
                 }
@@ -196,19 +231,18 @@ impl IrGenerator for FuncDef {
             .params()
             .iter()
             .map(|&param| {
-                let tk = get_typekind(program, context, param).clone();
                 let ty = get_type(program, context, param).clone();
-                (param, tk, ty)
+                (param, ty)
             })
             .collect();
 
         for i in 0..params.len() {
-            let (param, param_tk, param_ty) = params[i].clone();
-            let alloc_value = new_value_builder(program, context).alloc(param_ty);
+            let (param, param_ty) = params[i].clone();
+            let alloc_value = new_value_builder(program, context).alloc(param_ty.clone());
             add_value(program, context, alloc_value).unwrap();
             context.symbol_tables.add_var(
                 &self.func_f_params[i].get_ident(),
-                param_tk,
+                param_ty,
                 alloc_value,
             );
             let store_value = new_value_builder(program, context).store(param, alloc_value);
@@ -237,7 +271,7 @@ impl IrGenerator for FuncDef {
                     add_value(program, context, ret).unwrap();
                 }
                 TypeKind::Int32 => {
-                    let val_0 = new_value_builder(program, context).integer(0);
+                    let val_0 = const_int_value(program, context, 0);
                     let ret = new_value_builder(program, context).ret(Some(val_0));
                     add_value(program, context, ret).unwrap();
                 }

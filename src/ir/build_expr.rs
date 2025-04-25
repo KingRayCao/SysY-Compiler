@@ -16,24 +16,30 @@ impl IrGenerator for Exp {
 pub enum LValValue {
     Var(Value),
     Const(Value),
+    ArrayElem(Value),
 }
 
 impl IrGenerator for LVal {
     type Output = Result<LValValue, String>;
     fn build_ir(&self, program: &mut Program, context: &mut IrContext) -> Self::Output {
-        if self.index.is_empty() {
-            let (entry, _) = context.symbol_tables.get_symbol(&self.ident);
-            let entry = entry.unwrap();
-            match entry {
-                SymbolTableEntry::Var(_, value) => Ok(LValValue::Var(*value)),
-                SymbolTableEntry::Const(_, value) => {
-                    let val = *value;
-                    let const_val = new_value_builder(program, context).integer(val);
-                    Ok(LValValue::Const(const_val))
-                }
+        let (entry, _) = context.symbol_tables.get_symbol(&self.ident);
+        let entry = entry.unwrap();
+        match entry {
+            SymbolTableEntry::Var(_, value) => Ok(LValValue::Var(value)),
+            SymbolTableEntry::Const(_, value) => {
+                let const_val = const_int_value(program, context, value);
+                Ok(LValValue::Const(const_val))
             }
-        } else {
-            todo!()
+            SymbolTableEntry::Array(_, value, size) => {
+                let mut index: Vec<Value> = Vec::new();
+                let array_value = value;
+                for i in 0..self.index.len() {
+                    let index_val = self.index[i].build_ir(program, context)?;
+                    index.push(index_val);
+                }
+                let elem_val = get_array_elem(program, context, array_value, index);
+                Ok(LValValue::ArrayElem(elem_val))
+            }
         }
     }
 }
@@ -52,9 +58,14 @@ impl IrGenerator for PrimaryExp {
                         Ok(load)
                     }
                     LValValue::Const(value) => Ok(value),
+                    LValValue::ArrayElem(value) => {
+                        let load = new_value_builder(program, context).load(value);
+                        add_value(program, context, load)?;
+                        Ok(load)
+                    }
                 }
             }
-            PrimaryExp::Number(num) => Ok(new_value_builder(program, context).integer(*num)),
+            PrimaryExp::Number(num) => Ok(const_int_value(program, context, *num)),
         }
     }
 }
@@ -68,7 +79,7 @@ impl IrGenerator for UnaryExp {
                 let value = match op {
                     UnaryOp::Plus => exp_val,
                     UnaryOp::Minus => {
-                        let value_0 = new_value_builder(program, context).integer(0);
+                        let value_0 = const_int_value(program, context, 0);
                         let neg_val = new_value_builder(program, context).binary(
                             BinaryOp::Sub,
                             value_0,
@@ -78,7 +89,7 @@ impl IrGenerator for UnaryExp {
                         neg_val
                     }
                     UnaryOp::Not => {
-                        let value_0 = new_value_builder(program, context).integer(0);
+                        let value_0 = const_int_value(program, context, 0);
                         let not_val = new_value_builder(program, context).binary(
                             BinaryOp::Eq,
                             value_0,
@@ -236,7 +247,7 @@ impl IrGenerator for LAndExp {
                 change_current_bb(program, context, and_bb);
                 let res_val = new_value_builder(program, context).alloc(Type::get_i32());
                 add_value(program, context, res_val)?;
-                let val_0 = new_value_builder(program, context).integer(0);
+                let val_0 = const_int_value(program, context, 0);
                 let res_store_0 = new_value_builder(program, context).store(val_0, res_val);
                 add_value(program, context, res_store_0)?;
                 let lhs_val = lhs.build_ir(program, context)?;
@@ -286,8 +297,8 @@ impl IrGenerator for LOrExp {
                 change_current_bb(program, context, or_bb);
                 let res_val = new_value_builder(program, context).alloc(Type::get_i32());
                 add_value(program, context, res_val)?;
-                let val_1 = new_value_builder(program, context).integer(1);
-                let val_0 = new_value_builder(program, context).integer(0);
+                let val_1 = const_int_value(program, context, 1);
+                let val_0 = const_int_value(program, context, 0);
                 let res_store_1 = new_value_builder(program, context).store(val_1, res_val);
                 add_value(program, context, res_store_1)?;
                 let lhs_val = lhs.build_ir(program, context)?;

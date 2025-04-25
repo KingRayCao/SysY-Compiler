@@ -18,6 +18,12 @@ impl IrGenerator for Stmt {
                         Ok(())
                     }
                     LValValue::Const(_) => Err("Assign to constant".to_string()),
+                    LValValue::ArrayElem(value) => {
+                        let exp_val = exp.build_ir(program, context)?;
+                        let store = new_value_builder(program, context).store(exp_val, value);
+                        add_value(program, context, store)?;
+                        Ok(())
+                    }
                 }
             }
             Stmt::ExpStmt(exp) => {

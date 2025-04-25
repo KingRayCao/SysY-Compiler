@@ -1,4 +1,8 @@
+use super::const_eval::ConstI32Eval;
 use super::*;
+use crate::ast::decl::*;
+use crate::ast::exp::*;
+use crate::ast::stmt::*;
 use key_node_list::Node;
 use koopa::ir::builder::{
     BasicBlockBuilder, BlockBuilder, GlobalBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
@@ -196,6 +200,14 @@ pub fn new_value_builder<'a>(
     func_data.dfg_mut().new_value()
 }
 
+pub fn const_int_value(program: &mut Program, context: &mut IrContext, value: i32) -> Value {
+    if context.is_global {
+        program.new_value().integer(value)
+    } else {
+        new_value_builder(program, context).integer(value)
+    }
+}
+
 pub fn add_value(
     program: &mut Program,
     context: &mut IrContext,
@@ -264,15 +276,247 @@ pub fn get_func_data<'a>(
     program.func(func)
 }
 
+// =========== Array utils ============
+
+pub fn get_array_elem(
+    program: &mut Program,
+    context: &mut IrContext,
+    array: Value,
+    index: Vec<Value>,
+) -> Value {
+    let mut elem = array;
+    for i in index.iter() {
+        elem = new_value_builder(program, context).get_elem_ptr(elem, *i);
+        add_value(program, context, elem).unwrap();
+    }
+    elem
+}
+
+#[derive(Clone)]
+pub struct Array {
+    data: Vec<Value>,
+    size: Vec<usize>,
+}
+
+impl Array {
+    pub fn new(program: &mut Program, context: &mut IrContext, size: &Vec<usize>) -> Self {
+        let len = Self::size2len(size);
+        let val_0 = const_int_value(program, context, 0);
+        let data = vec![val_0; len];
+        Self {
+            data,
+            size: size.clone(),
+        }
+    }
+
+    pub fn get_mut(&mut self, idx: Vec<usize>) -> &mut Value {
+        let pos = self.index2pos(idx);
+        self.data.get_mut(pos).unwrap()
+    }
+    // -------- utils --------
+    fn pos2index(&self, pos: usize) -> Vec<usize> {
+        let mut result = Vec::new();
+        let mut pos = pos;
+        for i in self.size.iter().rev() {
+            result.push(pos % i);
+            pos /= i;
+        }
+        result.reverse();
+        result
+    }
+    fn index2pos(&self, idx: Vec<usize>) -> usize {
+        let mut result = 0;
+        let mut factor = 1;
+        for (i, &p) in idx.iter().enumerate().rev() {
+            result += p as usize * factor;
+            factor *= self.size[i] as usize;
+        }
+        result
+    }
+
+    pub fn exp2size(index: &Vec<ConstExp>, context: &IrContext) -> Vec<usize> {
+        index
+            .iter()
+            .map(|i| i.get_const_i32(context).unwrap() as usize)
+            .collect()
+    }
+
+    pub fn size2len(size: &Vec<usize>) -> usize {
+        size.iter().product::<usize>()
+    }
+
+    pub fn size2type(size: &Vec<usize>) -> Type {
+        let mut ty = Type::get_i32();
+        for i in size.iter().rev() {
+            ty = Type::get_array(ty, *i as usize);
+        }
+        ty
+    }
+    // -------- init --------
+    pub fn const_init_to_array(
+        &mut self,
+        program: &mut Program,
+        context: &mut IrContext,
+        init_val: &ConstInitVal,
+        size: &Vec<usize>,
+        start_pos: &mut usize,
+    ) {
+        match init_val {
+            ConstInitVal::ConstExp(_) => unreachable!(),
+            ConstInitVal::ConstArray(a) => {
+                let init_start_pos = start_pos.clone();
+                for v in a.iter() {
+                    match v {
+                        ConstInitVal::ConstExp(e) => {
+                            let val = e.get_const_i32(context).unwrap();
+                            let val = const_int_value(program, context, val);
+                            *self.data.get_mut(*start_pos as usize).unwrap() = val;
+                            *start_pos = *start_pos + 1;
+                        }
+                        ConstInitVal::ConstArray(_) => {
+                            // check current len
+                            let mut len = *start_pos - init_start_pos;
+                            let mut new_size: Vec<usize> = Vec::new();
+                            for dim in size.iter().skip(1).rev() {
+                                if len % *dim == 0 {
+                                    new_size.insert(0, *dim);
+                                    len = len / *dim;
+                                } else {
+                                    break;
+                                }
+                            }
+                            self.const_init_to_array(program, context, v, &new_size, start_pos);
+                        }
+                    }
+                }
+                // fill the rest with 0
+                let val_0 = const_int_value(program, context, 0);
+                while *start_pos < init_start_pos + size.iter().product::<usize>() {
+                    *self.data.get_mut(*start_pos as usize).unwrap() = val_0;
+                    *start_pos = *start_pos + 1;
+                }
+            }
+        }
+    }
+    pub fn init_to_array(
+        &mut self,
+        program: &mut Program,
+        context: &mut IrContext,
+        init_val: &InitVal,
+        size: &Vec<usize>,
+        start_pos: &mut usize,
+    ) {
+        match init_val {
+            InitVal::Exp(_) => unreachable!(),
+            InitVal::Array(a) => {
+                let init_start_pos = start_pos.clone();
+                for v in a.iter() {
+                    match v {
+                        InitVal::Exp(e) => {
+                            let val = e.build_ir(program, context).unwrap();
+                            *self.data.get_mut(*start_pos as usize).unwrap() = val;
+                            *start_pos = *start_pos + 1;
+                        }
+                        InitVal::Array(_) => {
+                            // check current len
+                            let mut len = *start_pos - init_start_pos;
+                            let mut new_size: Vec<usize> = Vec::new();
+                            for dim in size.iter().skip(1).rev() {
+                                if len % *dim == 0 {
+                                    new_size.insert(0, *dim);
+                                    len = len / *dim;
+                                } else {
+                                    break;
+                                }
+                            }
+                            self.init_to_array(program, context, v, &new_size, start_pos);
+                        }
+                    }
+                }
+                // fill the rest with 0
+                let val_0 = const_int_value(program, context, 0);
+                while *start_pos < init_start_pos + size.iter().product::<usize>() {
+                    *self.data.get_mut(*start_pos as usize).unwrap() = val_0;
+                    *start_pos = *start_pos + 1;
+                }
+            }
+        }
+    }
+    pub fn to_value(&self, program: &mut Program, context: &mut IrContext) -> Value {
+        let mut values = Vec::new();
+        for &v in self.data.iter() {
+            values.push(v);
+        }
+        for i in (0..self.size.len()).rev() {
+            let mut values_new = Vec::new();
+            let dim = self.size[i] as usize;
+            for j in (0..values.len()).step_by(dim) {
+                let val = if context.is_global {
+                    program.new_value().aggregate(values[j..j + dim].to_vec())
+                } else {
+                    new_value_builder(program, context).aggregate(values[j..j + dim].to_vec())
+                };
+                values_new.push(val);
+            }
+            values = values_new;
+        }
+        values[0]
+    }
+
+    pub fn init_assign_to_array(
+        &self,
+        program: &mut Program,
+        context: &mut IrContext,
+        array: Value,
+    ) {
+        for i in 0..self.data.len() {
+            let index = self
+                .pos2index(i)
+                .into_iter()
+                .map(|v| const_int_value(program, context, v as i32))
+                .collect();
+            let elem = get_array_elem(program, context, array, index);
+            let init_val = self.data[i];
+            let store = new_value_builder(program, context).store(init_val, elem);
+            add_value(program, context, store).unwrap();
+        }
+    }
+
+    pub fn get_const_init_array(
+        program: &mut Program,
+        context: &mut IrContext,
+        init_val: &ConstInitVal,
+        size: &Vec<usize>,
+    ) -> Array {
+        let mut start_pos = 0;
+        let mut const_init_array = Array::new(program, context, size);
+        const_init_array.const_init_to_array(program, context, init_val, size, &mut start_pos);
+        const_init_array
+    }
+    pub fn get_init_array(
+        program: &mut Program,
+        context: &mut IrContext,
+        init_val: &InitVal,
+        size: &Vec<usize>,
+    ) -> Array {
+        let mut start_pos = 0;
+        let mut init_array = Array::new(program, context, size);
+        init_array.init_to_array(program, context, init_val, size, &mut start_pos);
+        init_array
+    }
+}
+
 // ============ Symbol Table ============
 
 pub struct SymbolTableStack {
     tables: Vec<HashMap<String, SymbolTableEntry>>,
 }
 
+#[derive(Clone)]
 pub enum SymbolTableEntry {
-    Const(TypeKind, i32),
-    Var(TypeKind, Value),
+    Const(Type, i32),
+    Var(Type, Value),
+    Array(Type, Value, Vec<usize>),
 }
 
 impl SymbolTableStack {
@@ -285,9 +529,9 @@ impl SymbolTableStack {
     pub fn pop_table(&mut self) {
         self.tables.pop();
     }
-    pub fn get_symbol(&self, name: &str) -> (Option<&SymbolTableEntry>, usize) {
+    pub fn get_symbol(&self, name: &str) -> (Option<SymbolTableEntry>, usize) {
         for (i, table) in self.tables.iter().rev().enumerate() {
-            if let Some(entry) = table.get(name) {
+            if let Some(entry) = table.get(name).cloned() {
                 return (Some(entry), self.tables.len() - i - 1);
             }
         }
@@ -299,11 +543,14 @@ impl SymbolTableStack {
             .unwrap()
             .insert(name.to_string(), entry);
     }
-    pub fn add_var(&mut self, name: &str, tk: TypeKind, value: Value) {
-        self.add_symbol(name, SymbolTableEntry::Var(tk, value));
+    pub fn add_var(&mut self, name: &str, ty: Type, value: Value) {
+        self.add_symbol(name, SymbolTableEntry::Var(ty, value));
     }
-    pub fn add_const(&mut self, name: &str, tk: TypeKind, value: i32) {
-        self.add_symbol(name, SymbolTableEntry::Const(tk, value));
+    pub fn add_const(&mut self, name: &str, ty: Type, value: i32) {
+        self.add_symbol(name, SymbolTableEntry::Const(ty, value));
+    }
+    pub fn add_array(&mut self, name: &str, ty: Type, value: Value, size: Vec<usize>) {
+        self.add_symbol(name, SymbolTableEntry::Array(ty, value, size));
     }
     pub fn get_depth(&self) -> usize {
         self.tables.len() - 1

@@ -1,34 +1,54 @@
+use super::util::Array;
 use super::{IrContext, SymbolTableEntry};
-use crate::ast::exp::*;
+use crate::ast::{decl::ConstInitVal, decl::InitVal, exp::*};
+use koopa::ir::Program;
 
-pub trait ConstEval {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String>;
+pub trait ConstI32Eval {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String>;
 }
 
-impl ConstEval for Exp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for ConstInitVal {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
-            Exp::LOrExp(e) => e.get_const_value(context),
+            ConstInitVal::ConstExp(e) => e.get_const_i32(context),
+            ConstInitVal::ConstArray(a) => unreachable!(),
         }
     }
 }
 
-impl ConstEval for PrimaryExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for InitVal {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
+        match self {
+            InitVal::Exp(e) => e.get_const_i32(context),
+            InitVal::Array(a) => unreachable!(),
+        }
+    }
+}
+
+impl ConstI32Eval for Exp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
+        match self {
+            Exp::LOrExp(e) => e.get_const_i32(context),
+        }
+    }
+}
+
+impl ConstI32Eval for PrimaryExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
             PrimaryExp::Number(n) => Ok(*n),
-            PrimaryExp::BracketExp(e) => e.get_const_value(context),
-            PrimaryExp::LVal(lval) => lval.get_const_value(context),
+            PrimaryExp::BracketExp(e) => e.get_const_i32(context),
+            PrimaryExp::LVal(lval) => lval.get_const_i32(context),
         }
     }
 }
 
-impl ConstEval for UnaryExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for UnaryExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
-            UnaryExp::PrimaryExp(p) => p.get_const_value(context),
+            UnaryExp::PrimaryExp(p) => p.get_const_i32(context),
             UnaryExp::UnaryExp(op, e) => {
-                let val = e.get_const_value(context).unwrap();
+                let val = e.get_const_i32(context).unwrap();
                 match op {
                     UnaryOp::Plus => Ok(val),
                     UnaryOp::Minus => Ok(-val),
@@ -40,13 +60,13 @@ impl ConstEval for UnaryExp {
     }
 }
 
-impl ConstEval for MulExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for MulExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
-            MulExp::UnaryExp(e) => e.get_const_value(context),
+            MulExp::UnaryExp(e) => e.get_const_i32(context),
             MulExp::MulExp(e, op, u) => {
-                let val = e.get_const_value(context).unwrap();
-                let uval = u.get_const_value(context).unwrap();
+                let val = e.get_const_i32(context).unwrap();
+                let uval = u.get_const_i32(context).unwrap();
                 match op {
                     MulOp::Mul => Ok(val * uval),
                     MulOp::Div => Ok(val / uval),
@@ -57,13 +77,13 @@ impl ConstEval for MulExp {
     }
 }
 
-impl ConstEval for AddExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for AddExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
-            AddExp::MulExp(e) => e.get_const_value(context),
+            AddExp::MulExp(e) => e.get_const_i32(context),
             AddExp::AddExp(e, op, m) => {
-                let val = e.get_const_value(context).unwrap();
-                let mval = m.get_const_value(context).unwrap();
+                let val = e.get_const_i32(context).unwrap();
+                let mval = m.get_const_i32(context).unwrap();
                 match op {
                     AddOp::Add => Ok(val + mval),
                     AddOp::Sub => Ok(val - mval),
@@ -73,13 +93,13 @@ impl ConstEval for AddExp {
     }
 }
 
-impl ConstEval for RelExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for RelExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
-            RelExp::AddExp(e) => e.get_const_value(context),
+            RelExp::AddExp(e) => e.get_const_i32(context),
             RelExp::RelExp(e, op, a) => {
-                let val = e.get_const_value(context).unwrap();
-                let aval = a.get_const_value(context).unwrap();
+                let val = e.get_const_i32(context).unwrap();
+                let aval = a.get_const_i32(context).unwrap();
                 match op {
                     RelOp::Lt => Ok(if val < aval { 1 } else { 0 }),
                     RelOp::Le => Ok(if val <= aval { 1 } else { 0 }),
@@ -91,13 +111,13 @@ impl ConstEval for RelExp {
     }
 }
 
-impl ConstEval for EqExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for EqExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
-            EqExp::RelExp(e) => e.get_const_value(context),
+            EqExp::RelExp(e) => e.get_const_i32(context),
             EqExp::EqExp(e, op, r) => {
-                let val = e.get_const_value(context).unwrap();
-                let rval = r.get_const_value(context).unwrap();
+                let val = e.get_const_i32(context).unwrap();
+                let rval = r.get_const_i32(context).unwrap();
                 match op {
                     EqOp::Eq => Ok(if val == rval { 1 } else { 0 }),
                     EqOp::Ne => Ok(if val != rval { 1 } else { 0 }),
@@ -107,13 +127,13 @@ impl ConstEval for EqExp {
     }
 }
 
-impl ConstEval for LAndExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for LAndExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
-            LAndExp::EqExp(e) => e.get_const_value(context),
+            LAndExp::EqExp(e) => e.get_const_i32(context),
             LAndExp::LAndExp(e, eq) => {
-                let val = e.get_const_value(context).unwrap();
-                let eqval = eq.get_const_value(context).unwrap();
+                let val = e.get_const_i32(context).unwrap();
+                let eqval = eq.get_const_i32(context).unwrap();
                 if val != 0 && eqval != 0 {
                     Ok(1)
                 } else {
@@ -124,13 +144,13 @@ impl ConstEval for LAndExp {
     }
 }
 
-impl ConstEval for LOrExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for LOrExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
-            LOrExp::LAndExp(e) => e.get_const_value(context),
+            LOrExp::LAndExp(e) => e.get_const_i32(context),
             LOrExp::LOrExp(e, land) => {
-                let val = e.get_const_value(context).unwrap();
-                let landval = land.get_const_value(context).unwrap();
+                let val = e.get_const_i32(context).unwrap();
+                let landval = land.get_const_i32(context).unwrap();
                 if val != 0 || landval != 0 {
                     Ok(1)
                 } else {
@@ -141,12 +161,12 @@ impl ConstEval for LOrExp {
     }
 }
 
-impl ConstEval for LVal {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
+impl ConstI32Eval for LVal {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         let (symbol, _) = context.symbol_tables.get_symbol(&self.ident);
         if let Some(symbol) = symbol {
             match symbol {
-                SymbolTableEntry::Const(_, value) => Ok(*value),
+                SymbolTableEntry::Const(_, value) => Ok(value),
                 _ => Err(format!(
                     "{} cannot be evaluated during compilation",
                     self.ident
@@ -158,8 +178,8 @@ impl ConstEval for LVal {
     }
 }
 
-impl ConstEval for ConstExp {
-    fn get_const_value(&self, context: &IrContext) -> Result<i32, String> {
-        self.exp.get_const_value(context)
+impl ConstI32Eval for ConstExp {
+    fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
+        self.exp.get_const_i32(context)
     }
 }
