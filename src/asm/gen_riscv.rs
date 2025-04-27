@@ -1,4 +1,4 @@
-use super::{build_func::FuncContext, Asm, Reg};
+use super::{build_func::FuncContext, util::ValueTable, Asm, Reg};
 
 /*
     Notice:
@@ -10,61 +10,73 @@ pub fn riscv_bin_op_imm(
     dest: Reg,
     src: Reg,
     imm_data: i32,
-    func_ctx: &mut FuncContext,
-) -> Asm {
+    asm: &mut Asm,
+    value_table: &mut ValueTable,
+) {
     if imm_data >= -2048 && imm_data <= 2047 {
-        return format!("  {}i {}, {}, {}\n", op, dest, src, imm_data);
+        asm.push_str(&format!("  {}i {}, {}, {}\n", op, dest, src, imm_data));
     } else {
-        let tmp_reg = func_ctx.reg_value_table.alloc_temp_reg();
-        let mut ret = format!("  li {}, {}\n", tmp_reg, imm_data);
-        ret += &format!("  {} {}, {}, {}\n", op, dest, src, tmp_reg);
-        func_ctx.reg_value_table.free_reg(tmp_reg);
-        return ret;
+        let tmp_reg = value_table.assign_temp_to_reg(imm_data, asm);
+        asm.push_str(&format!("  {} {}, {}, {}\n", op, dest, src, tmp_reg));
+        value_table.unlock_reg(&tmp_reg);
     }
 }
 
-pub fn riscv_bin_op(op: &str, dest: Reg, src0: Reg, src1: Reg) -> Asm {
-    return format!("  {} {}, {}, {}\n", op, dest, src0, src1);
+pub fn riscv_bin_op(
+    op: &str,
+    dest: Reg,
+    src0: Reg,
+    src1: Reg,
+    asm: &mut Asm,
+    value_table: &mut ValueTable,
+) {
+    asm.push_str(&format!("  {} {}, {}, {}\n", op, dest, src0, src1));
 }
 
-pub fn riscv_unary_op(op: &str, dest: Reg, src: Reg) -> Asm {
-    return format!("  {} {}, {}\n", op, dest, src);
+pub fn riscv_unary_op(op: &str, dest: Reg, src: Reg, asm: &mut Asm, value_table: &mut ValueTable) {
+    asm.push_str(&format!("  {} {}, {}\n", op, dest, src));
 }
 
-pub fn riscv_lw(dest: Reg, src: Reg, imm_offset: i32, func_ctx: &mut FuncContext) -> Asm {
+pub fn riscv_lw(dest: Reg, src: Reg, imm_offset: i32, asm: &mut Asm, value_table: &mut ValueTable) {
     if imm_offset >= -2048 && imm_offset <= 2047 {
-        return format!("  lw {}, {}({})\n", dest, imm_offset, src);
+        asm.push_str(&format!("  lw {}, {}({})\n", dest, imm_offset, src));
     } else {
-        let tmp_reg = func_ctx.reg_value_table.alloc_temp_reg();
-        let mut ret = format!("  li {}, {}\n", tmp_reg, imm_offset);
-        ret += &format!("  add {}, {}, {}\n", tmp_reg, tmp_reg, src);
-        ret += &format!("  lw {}, 0({})\n", dest, tmp_reg);
-        func_ctx.reg_value_table.free_reg(tmp_reg);
-        return ret;
+        let tmp_reg = value_table.assign_temp_to_reg(imm_offset, asm);
+        asm.push_str(&format!("  add {}, {}, {}\n", tmp_reg, tmp_reg, src));
+        asm.push_str(&format!("  lw {}, 0({})\n", dest, tmp_reg));
+        value_table.unlock_reg(&tmp_reg);
     }
 }
 
-pub fn riscv_sw(data: Reg, dest: Reg, imm_offset: i32, func_ctx: &mut FuncContext) -> Asm {
+pub fn riscv_sw(
+    data: Reg,
+    dest: Reg,
+    imm_offset: i32,
+    asm: &mut Asm,
+    value_table: &mut ValueTable,
+) {
     if imm_offset >= -2048 && imm_offset <= 2047 {
-        return format!("  sw {}, {}({})\n", data, imm_offset, dest);
+        asm.push_str(&format!("  sw {}, {}({})\n", data, imm_offset, dest));
     } else {
-        let tmp_reg = func_ctx.reg_value_table.alloc_temp_reg();
-        let mut ret = format!("  li {}, {}\n", tmp_reg, imm_offset);
-        ret += &format!("  add {}, {}, {}\n", tmp_reg, tmp_reg, dest);
-        ret += &format!("  sw {}, 0({})\n", data, tmp_reg);
-        func_ctx.reg_value_table.free_reg(tmp_reg);
-        return ret;
+        let tmp_reg = value_table.assign_temp_to_reg(imm_offset, asm);
+        asm.push_str(&format!("  add {}, {}, {}\n", tmp_reg, tmp_reg, dest));
+        asm.push_str(&format!("  sw {}, 0({})\n", data, tmp_reg));
+        value_table.unlock_reg(&tmp_reg);
     }
 }
 
-pub fn riscv_swi(imm_data: i32, imm_offset: i32, dest: Reg, func_ctx: &mut FuncContext) -> Asm {
-    let tmp_reg = func_ctx.reg_value_table.alloc_temp_reg();
-    let mut ret = format!("  li {}, {}\n", tmp_reg, imm_data);
-    ret += &riscv_sw(tmp_reg, dest, imm_offset, func_ctx);
-    func_ctx.reg_value_table.free_reg(tmp_reg);
-    ret
+pub fn riscv_swi(
+    imm_data: i32,
+    imm_offset: i32,
+    dest: Reg,
+    asm: &mut Asm,
+    value_table: &mut ValueTable,
+) {
+    let tmp_reg = value_table.assign_temp_to_reg(imm_data, asm);
+    riscv_sw(tmp_reg, dest, imm_offset, asm, value_table);
+    value_table.unlock_reg(&tmp_reg);
 }
 
-pub fn riscv_mv(dest: Reg, src: Reg) -> Asm {
-    return format!("  mv {}, {}\n", dest, src);
+pub fn riscv_mv(dest: Reg, src: Reg, asm: &mut Asm) {
+    asm.push_str(&format!("  mv {}, {}\n", dest, src));
 }

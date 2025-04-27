@@ -17,6 +17,8 @@ pub type Asm = String;
 
 pub type Reg = &'static str;
 
+type Addr = i32;
+
 pub fn koopa_to_asm(koopa_program: &Program) -> String {
     koopa_program.to_asm()
 }

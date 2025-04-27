@@ -1,6 +1,6 @@
 use super::build_func::FuncContext;
 use super::gen_riscv::*;
-use super::{Asm, Reg};
+use super::{Addr, Asm, Reg};
 use koopa::ir::entities::{BasicBlockData, ValueData};
 use koopa::ir::{BasicBlock, FunctionData, Value, ValueKind};
 use std::collections::HashMap;
@@ -14,112 +14,262 @@ pub fn get_bb_data(func_data: &FunctionData, bb: BasicBlock) -> &BasicBlockData 
 pub fn get_bb_name(func_data: &FunctionData, bb: BasicBlock) -> &str {
     &get_bb_data(func_data, bb).name().as_ref().unwrap()[1..]
 }
-// Reg-Value Table
-pub struct RegValueTable {
-    reg_value: HashMap<Reg, Option<Option<Value>>>,
-    // Some(Some(value)) means the value is in the register
-    // Some(None) means the reg is in temporary use
-    // None means the reg is free
-    value_reg: HashMap<Value, Reg>,
+// ============ Value Table =================
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RegStatus {
+    Free,
+    Used(Addr),
+    Temp,
 }
 
-impl RegValueTable {
+pub struct ValueTable {
+    value_addr: HashMap<Value, Addr>,
+    value_is_alloc: HashMap<Value, bool>,
+    reg_status: HashMap<Reg, RegStatus>,
+    addr_reg: HashMap<Addr, Option<Reg>>,
+    reg_locked: HashMap<Reg, bool>,
+}
+
+impl ValueTable {
     pub fn new() -> Self {
-        let mut reg_value: HashMap<Reg, Option<Option<Value>>> = HashMap::new();
-        let value_reg: HashMap<Value, Reg> = HashMap::new();
-        reg_value.insert("a0", None);
-        reg_value.insert("a1", None);
-        reg_value.insert("a2", None);
-        reg_value.insert("a3", None);
-        reg_value.insert("a4", None);
-        reg_value.insert("a5", None);
-        reg_value.insert("a6", None);
-        reg_value.insert("a7", None);
-        reg_value.insert("t0", None);
-        reg_value.insert("t1", None);
-        reg_value.insert("t2", None);
-        reg_value.insert("t3", None);
-        reg_value.insert("t4", None);
-        reg_value.insert("t5", None);
-        reg_value.insert("t6", None);
-        RegValueTable {
-            reg_value,
-            value_reg,
+        let value_addr: HashMap<Value, Addr> = HashMap::new();
+        let value_is_alloc: HashMap<Value, bool> = HashMap::new();
+        let mut reg_status: HashMap<Reg, RegStatus> = HashMap::new();
+        let addr_reg = HashMap::new();
+        let mut reg_locked: HashMap<Reg, bool> = HashMap::new();
+        reg_status.insert("t0", RegStatus::Free);
+        reg_locked.insert("t0", false);
+        reg_status.insert("t1", RegStatus::Free);
+        reg_locked.insert("t1", false);
+        reg_status.insert("t2", RegStatus::Free);
+        reg_locked.insert("t2", false);
+        reg_status.insert("t3", RegStatus::Free);
+        reg_locked.insert("t3", false);
+        reg_status.insert("t4", RegStatus::Free);
+        reg_locked.insert("t4", false);
+        reg_status.insert("t5", RegStatus::Free);
+        reg_locked.insert("t5", false);
+        reg_status.insert("t6", RegStatus::Free);
+        reg_locked.insert("t6", false);
+        reg_status.insert("a0", RegStatus::Free);
+        reg_locked.insert("a0", false);
+        reg_status.insert("a1", RegStatus::Free);
+        reg_locked.insert("a1", false);
+        reg_status.insert("a2", RegStatus::Free);
+        reg_locked.insert("a2", false);
+        reg_status.insert("a3", RegStatus::Free);
+        reg_locked.insert("a3", false);
+        reg_status.insert("a4", RegStatus::Free);
+        reg_locked.insert("a4", false);
+        reg_status.insert("a5", RegStatus::Free);
+        reg_locked.insert("a5", false);
+        reg_status.insert("a6", RegStatus::Free);
+        reg_locked.insert("a6", false);
+        reg_status.insert("a7", RegStatus::Free);
+        reg_locked.insert("a7", false);
+        ValueTable {
+            value_addr,
+            value_is_alloc,
+            reg_status,
+            addr_reg,
+            reg_locked,
         }
     }
 
-    pub fn get_value(&self, reg: Reg) -> Option<Option<Value>> {
-        self.reg_value[&reg]
+    pub fn get_value_addr(&self, value: &Value) -> Option<Addr> {
+        self.value_addr.get(value).map(|v| *v)
     }
 
-    pub fn get_reg(&self, value: Value) -> Option<Reg> {
-        self.value_reg.get(&value).cloned()
+    pub fn get_reg_status(&self, reg: &Reg) -> RegStatus {
+        self.reg_status[reg]
     }
 
-    pub fn alloc_reg(&mut self, reg: Reg, value: Option<Value>) {
-        if self.reg_is_free(reg) {
-            *self.reg_value.get_mut(&reg).unwrap() = value.map(|v| Some(v));
-            if let Some(value) = value {
-                self.value_reg.insert(value, reg);
-            }
-        } else {
-            panic!("register {} is not free", reg);
+    pub fn get_value_reg(&self, value: &Value) -> Option<Reg> {
+        let addr = self.get_value_addr(value).unwrap();
+        self.addr_reg.get(&addr).unwrap().clone()
+    }
+
+    // lock reg, so that it cannot be used by other values
+    // be sure to lock reg before generating riscv
+    pub fn lock_reg(&mut self, reg: &Reg) {
+        if let Some(v) = self.reg_locked.get_mut(reg) {
+            *v = true;
         }
     }
 
-    pub fn alloc_value(&mut self, value: Value) -> Reg {
-        for (reg, v) in self.reg_value.iter_mut() {
-            if v.is_none() {
-                *v = Some(Some(value));
-                self.value_reg.insert(value, reg);
-                return reg;
-            }
-        }
-        panic!("no available register");
+    pub fn reg_is_locked(&self, reg: &Reg) -> bool {
+        *self.reg_locked.get(reg).unwrap()
     }
 
-    pub fn free_value(&mut self, value: Value) {
-        let reg = self.value_reg[&value];
-        if let Some(v) = self.reg_value.get_mut(&reg) {
-            if let Some(Some(value)) = v.take() {
-                self.value_reg.remove(&value);
-            }
-        }
-    }
-
-    pub fn free_reg(&mut self, reg: Reg) {
-        if let Some(v) = self.reg_value.get_mut(&reg) {
-            if let Some(Some(value)) = v.take() {
-                self.value_reg.remove(&value);
-            }
-        }
-    }
-
-    pub fn reg_is_free(&self, reg: Reg) -> bool {
-        self.reg_value[&reg].is_none()
-    }
-
-    pub fn value_in_reg(&self, value: Value) -> bool {
-        self.value_reg.contains_key(&value)
-    }
-
-    pub fn alloc_temp_reg(&mut self) -> Reg {
-        for (reg, v) in self.reg_value.iter_mut() {
-            if v.is_none() {
-                *v = Some(None);
-                return reg;
-            }
-        }
-        panic!("no available register");
-    }
-
-    pub fn reg_all_free(&mut self) -> bool {
-        for (_, v) in self.reg_value.iter_mut() {
-            if v.is_some() {
+    pub fn reg_all_unlocked(&self) -> bool {
+        for (_, v) in self.reg_locked.iter() {
+            if *v {
                 return false;
             }
         }
         true
+    }
+
+    pub fn unlock_reg(&mut self, reg: &Reg) {
+        if let Some(v) = self.reg_locked.get_mut(reg) {
+            *v = false;
+        }
+    }
+
+    pub fn is_alloc(&self, value: &Value) -> bool {
+        if let Some(v) = self.value_is_alloc.get(value) {
+            return *v;
+        }
+        false
+    }
+
+    pub fn get_free_reg(&mut self, asm: &mut Asm) -> Reg {
+        for (reg, v) in self.reg_status.iter() {
+            if *v == RegStatus::Free {
+                return reg;
+            }
+        }
+        let mut reg_to_free = None;
+        for (reg, v) in self.reg_status.iter() {
+            if !self.reg_is_locked(reg) {
+                if let RegStatus::Temp = v {
+                    reg_to_free = Some(reg.clone());
+                    break;
+                }
+            }
+        }
+
+        if let None = reg_to_free {
+            for (reg, v) in self.reg_status.iter() {
+                if !self.reg_is_locked(reg) {
+                    reg_to_free = Some(reg.clone());
+                    break;
+                }
+            }
+        }
+        if let Some(reg) = reg_to_free {
+            self.free_reg(&reg, asm);
+            return reg;
+        } else {
+            panic!("all regs are locked");
+        }
+    }
+
+    pub fn assign_value_to_reg(&mut self, value: &Value, asm: &mut Asm) -> Reg {
+        // if value is already in reg, return reg
+        if let Some(reg) = self.get_value_reg(value) {
+            self.lock_reg(&reg);
+            return reg;
+        }
+        // value in stack, load to reg
+        let addr = self.get_value_addr(value);
+        if let Some(offset) = addr {
+            let reg = self.get_free_reg(asm);
+
+            self.addr_reg.insert(offset, Some(reg));
+            self.reg_status.insert(reg, RegStatus::Used(offset));
+            self.lock_reg(&reg);
+
+            return reg;
+        } else {
+            panic!("value is not in stack");
+        }
+    }
+
+    pub fn load_value_to_reg(
+        &mut self,
+        value: &Value,
+        value_data: &ValueData,
+        asm: &mut Asm,
+    ) -> Reg {
+        match value_data.kind() {
+            ValueKind::Integer(num) => self.assign_temp_to_reg(num.value(), asm),
+            _ => {
+                let reg = self.assign_value_to_reg(value, asm);
+                let offset = self.get_value_addr(value).unwrap();
+                riscv_lw(reg, "sp", offset, asm, self);
+                reg
+            }
+        }
+    }
+
+    pub fn load_value_to_specified_reg(
+        &mut self,
+        value: &Value,
+        value_data: &ValueData,
+        reg: &Reg,
+        asm: &mut Asm,
+    ) -> Reg {
+        if let Some(value_reg) = self.get_value_reg(value) {
+            if value_reg == *reg {
+                return *reg;
+            }
+        }
+        // free specified reg
+        self.free_reg(reg, asm);
+        // load value to specified reg
+        if let Some(value_reg) = self.get_value_reg(value) {
+            riscv_mv(reg, value_reg, asm);
+            return reg;
+        } else {
+            let addr = self.get_value_addr(value);
+            if let Some(offset) = addr {
+                self.addr_reg.insert(offset, Some(reg));
+                self.reg_status.insert(reg, RegStatus::Used(offset));
+                self.lock_reg(&reg);
+                riscv_lw(reg, "sp", offset, asm, self);
+                return reg;
+            } else {
+                panic!("value is not in stack");
+            }
+        }
+    }
+
+    pub fn assign_temp_to_reg(&mut self, temp: i32, asm: &mut Asm) -> Reg {
+        if temp == 0 {
+            return "x0";
+        }
+        // find a free reg
+        let reg = self.get_free_reg(asm);
+        self.reg_status.insert(reg, RegStatus::Temp);
+        self.lock_reg(&reg);
+        asm.push_str(&format!("  li {}, {}\n", reg, temp));
+        reg
+    }
+
+    pub fn assign_temp_to_specified_reg(&mut self, temp: i32, reg: &Reg, asm: &mut Asm) {
+        // free specified reg
+        self.free_reg(reg, asm);
+        // assign temp to specified reg
+        self.reg_status.insert(*reg, RegStatus::Temp);
+        self.lock_reg(reg);
+        asm.push_str(&format!("  li {}, {}\n", reg, temp));
+    }
+
+    pub fn alloc_value(&mut self, value: Value, offset: i32, is_alloc: bool) {
+        self.value_addr.insert(value, offset);
+        self.value_is_alloc.insert(value, is_alloc);
+    }
+
+    pub fn free_reg(&mut self, reg: &Reg, asm: &mut Asm) {
+        if !self.reg_is_locked(reg) {
+            panic!("reg is locked");
+        }
+        if let Some(v) = self.reg_status.get_mut(reg) {
+            match *v {
+                RegStatus::Used(addr) => {
+                    *v = RegStatus::Free;
+                    self.addr_reg.insert(addr, None);
+                    riscv_sw(reg, "sp", addr, asm, self);
+                }
+
+                RegStatus::Temp => {
+                    *v = RegStatus::Free;
+                }
+                RegStatus::Free => {}
+            }
+        }
     }
 }
 

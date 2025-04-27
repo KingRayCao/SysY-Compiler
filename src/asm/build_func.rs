@@ -6,15 +6,18 @@ use super::GenerateAsm;
 use super::{Asm, Reg};
 use koopa::ir::entities::ValueData;
 use koopa::ir::{FunctionData, Value, ValueKind};
+use std::cmp::max;
 use std::collections::HashMap;
+use std::hash::Hash;
 
 type ValueAddr = HashMap<Value, i32>;
 pub struct FuncContext<'a> {
     pub func_data: &'a FunctionData,
     pub stack_size: usize,
-    pub value_addr: ValueAddr,
     pub current_offset: usize,
-    pub reg_value_table: RegValueTable,
+    pub value_table: ValueTable,
+    pub has_call: bool,
+    pub max_param_num: i32,
 }
 
 impl GenerateAsm for FunctionData {
@@ -34,14 +37,16 @@ impl GenerateAsm for FunctionData {
         // body
         for (&bb, node) in self.layout().bbs() {
             let bb_name = get_bb_name(self, bb);
-            println!("bb_name: {}", bb_name);
-            if bb_name != "entry" {
+            if !bb_name.starts_with("entry") {
+                if get_bb_data(func_context.func_data, bb).used_by().is_empty() {
+                    continue;
+                }
                 asm += &format!("\n{}:\n", bb_name);
             }
             for &inst in node.insts().keys() {
-                print_value(self, &func_context, inst);
                 asm += &value_to_asm(inst, &mut func_context);
             }
+            // TODO: release all regs
         }
         assert!(func_context.reg_all_free());
         assert!((func_context.current_offset + 15) / 16 * 16 == func_context.stack_size);
@@ -51,13 +56,18 @@ impl GenerateAsm for FunctionData {
 
 impl<'a> FuncContext<'a> {
     pub fn new(func_data: &'a FunctionData) -> Self {
-        let func_context = FuncContext {
+        let mut func_context = FuncContext {
             func_data: func_data,
-            stack_size: Self::get_stack_size(func_data),
-            value_addr: ValueAddr::new(),
+            stack_size: 0,
             current_offset: 0,
-            reg_value_table: RegValueTable::new(),
+            value_table: ValueTable::new(),
+            has_call: false,
+            max_param_num: 0,
         };
+        let stack_size = Self::get_stack_size(func_data, &mut func_context);
+        func_context.stack_size = stack_size;
+        // TODO: 初始化value_table为param
+        todo!()
         func_context
     }
 
@@ -65,42 +75,41 @@ impl<'a> FuncContext<'a> {
         get_value_data(self.func_data, value)
     }
 
-    fn get_stack_size(func_data: &FunctionData) -> usize {
+    fn get_stack_size(func_data: &FunctionData, func_context: &mut FuncContext) -> usize {
         let mut stack_size = 0;
         for (&bb, node) in func_data.layout().bbs() {
             for &inst in node.insts().keys() {
-                stack_size += Self::get_value_stack_size(func_data, inst);
+                stack_size += Self::get_value_stack_size(func_data, inst, func_context);
             }
         }
+        if func_context.has_call {
+            stack_size += 4;
+        }
+        stack_size += (max(func_context.max_param_num - 8, 0) * 4) as usize;
         // align to 16
         stack_size = (stack_size + 15) / 16 * 16;
         return stack_size;
     }
 
-    pub fn get_value_stack_size(func_data: &FunctionData, value: Value) -> usize {
+    pub fn get_value_stack_size(
+        func_data: &FunctionData,
+        value: Value,
+        func_context: &mut FuncContext,
+    ) -> usize {
         let valuedata = func_data.dfg().value(value);
         // 注意区分TypeKind和ValueKind
         match valuedata.kind() {
-            ValueKind::Alloc(_) => 4,
-            ValueKind::Load(_) => 0,
-            ValueKind::Integer(_) => 0,
-            ValueKind::Binary(bin) => 0,
+            ValueKind::Alloc(alloc) => valuedata.ty().size(),
+            ValueKind::Load(_) => valuedata.ty().size(),
+            ValueKind::Integer(_) => valuedata.ty().size(),
+            ValueKind::Binary(bin) => valuedata.ty().size(),
             ValueKind::Store(store) => valuedata.ty().size(),
+            ValueKind::Call(call) => {
+                func_context.has_call = true;
+                func_context.max_param_num = max(func_context.max_param_num, call.args().len());
+                valuedata.ty().size()
+            }
             _ => valuedata.ty().size(),
-        }
-    }
-
-    pub fn load_value_to_reg(&mut self, value: Value) -> (Asm, Reg) {
-        match self.reg_value_table.get_reg(value) {
-            Some(reg) => {
-                // already in reg
-                (String::new(), reg)
-            }
-            _ => {
-                // not in reg
-                let reg = self.reg_value_table.alloc_value(value);
-                (riscv_lw(reg, "sp", self.value_addr[&value], self), reg)
-            }
         }
     }
 
@@ -109,8 +118,5 @@ impl<'a> FuncContext<'a> {
         let value_data = self.func_data.dfg().value(value);
         println!("value: {:?}", value);
         print_value_data(value_data);
-    }
-    pub fn reg_all_free(&mut self) -> bool {
-        self.reg_value_table.reg_all_free()
     }
 }
