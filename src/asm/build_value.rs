@@ -1,6 +1,6 @@
 use super::gen_riscv::*;
 use super::util::*;
-use super::{Asm, Reg};
+use super::{Asm, Reg, REG_LIST};
 use crate::asm::build_func::FuncContext;
 use koopa::ir::{BinaryOp, Value, ValueKind};
 
@@ -17,14 +17,13 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             // compile return value
             if let Some(ret_value) = ret_value {
                 let ret_value_data = get_value_data(func_data, ret_value);
-                let ret_value_reg = func_ctx.value_table.load_value_to_specified_reg(
+                let ret_value_reg = func_ctx.value_table.assign_value_to_specified_reg(
                     &ret_value,
                     ret_value_data,
                     &"a0",
                     asm,
                 );
                 // epilogue
-                todo!();
                 riscv_bin_op_imm(
                     "add",
                     "sp",
@@ -35,40 +34,43 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
                 );
                 // return
                 asm.push_str("  ret\n");
+                func_ctx.value_table.unlock_reg(&ret_value_reg);
             }
         }
         ValueKind::Alloc(alloc) => {
             let size = value_data.ty().size();
             let offset = func_ctx.current_offset as i32;
-            func_ctx.value_table.alloc_value(value, offset, true);
+            func_ctx.value_table.alloc_value(value, offset);
             func_ctx.current_offset += size;
         }
         ValueKind::Load(load) => {
-            // let load_value = load.src();
-            // let load_value_addr = func_ctx.value_addr[&load_value];
-            // let load_reg = func_ctx.reg_value_table.alloc_value(value);
-            // asm += &riscv_lw(load_reg, "sp", load_value_addr, func_ctx);
-            // if value_data.used_by().is_empty() {
-            //     func_ctx.reg_value_table.free_reg(load_reg);
-            // }
-            // asm
             let size = value_data.ty().size();
             let offset = func_ctx.current_offset as i32;
-            func_ctx.value_table.alloc_value(value, offset, false);
+            func_ctx.value_table.alloc_value(value, offset);
             func_ctx.current_offset += size;
 
             let src_value = load.src();
             let src_value_data = get_value_data(func_data, src_value);
-            let load_reg = func_ctx.value_table.assign_value_to_reg(&value, asm);
-            if func_ctx.value_table.is_alloc(&src_value) {
-                // indicate this value is in alloc list; we can determine the offset directly
-                let src_reg = func_ctx.value_table.load_value_to_reg(&src_value, src_value_data, asm);
-                asm.push_str()
-                func_ctx.value_table.unlock_reg(&load_reg);
+            let load_reg = func_ctx.value_table.allocate_value_to_reg(&value, asm);
 
+            if let ValueKind::Alloc(_) = src_value_data.kind() {
+                // indicate this value is in alloc list; we can determine the offset directly
+                let addr = func_ctx.value_table.get_value_addr(&src_value);
+                if let Some(offset) = addr {
+                    riscv_lw(load_reg, "sp", offset, asm, &mut func_ctx.value_table);
+                } else {
+                    panic!("value is not in stack");
+                }
             } else {
-                panic!("value is not in stack");
+                // indicate this value is a pointer; we need to load the value from the stack
+                let src_ptr_reg =
+                    func_ctx
+                        .value_table
+                        .assign_value_to_reg(&src_value, src_value_data, asm);
+                riscv_lw(load_reg, src_ptr_reg, 0, asm, &mut func_ctx.value_table);
+                func_ctx.value_table.unlock_reg(&src_ptr_reg);
             }
+            func_ctx.value_table.unlock_reg(&load_reg);
         }
         ValueKind::Binary(bin) => {
             let size = value_data.ty().size();
@@ -81,9 +83,13 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             let lhs_value_data = get_value_data(func_data, lhs_value);
             let rhs_value = bin.rhs();
             let rhs_value_data = get_value_data(func_data, rhs_value);
-            let lhs_reg = func_ctx.value_table.load_value_to_reg(&lhs_value,lhs_value_data, asm);
-            let rhs_reg = func_ctx.value_table.load_value_to_reg(&rhs_value,rhs_value_data, asm);
-            let dest_reg = func_ctx.value_table.assign_value_to_reg(&value, asm);
+            let lhs_reg = func_ctx
+                .value_table
+                .assign_value_to_reg(&lhs_value, lhs_value_data, asm);
+            let rhs_reg = func_ctx
+                .value_table
+                .assign_value_to_reg(&rhs_value, rhs_value_data, asm);
+            let dest_reg = func_ctx.value_table.allocate_value_to_reg(&value, asm);
             match op {
                 BinaryOp::Add => {
                     riscv_bin_op(
@@ -239,42 +245,88 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
         }
         ValueKind::Store(store) => {
             let store_value = store.value();
+            let store_value_data = get_value_data(func_data, store_value);
             let store_dest = store.dest();
-            let store_value_reg = func_ctx.value_table.load_value_to_reg(&value, asm);
-            let store_dest_addr = func_ctx.value_addr[&store_dest];
-            asm += &store_value_asm;
-            asm += &store_reg_asm;
-            asm += &riscv_sw(store_reg, "sp", store_dest_addr, func_ctx);
-            func_ctx.reg_value_table.free_reg(store_reg);
-            asm
+            let store_dest_data = get_value_data(func_data, store_dest);
+            // let store_value_reg = func_ctx.value_table.assign_value_to_reg(&value, asm);
+            // let store_dest_addr = func_ctx.value_addr[&store_dest];
+            // asm += &store_value_asm;
+            // asm += &store_reg_asm;
+            // asm += &riscv_sw(store_reg, "sp", store_dest_addr, func_ctx);
+            // func_ctx.reg_value_table.free_reg(store_reg);
+            // asm
+
+            let store_value_reg =
+                func_ctx
+                    .value_table
+                    .assign_value_to_reg(&store_value, store_value_data, asm);
+            if let ValueKind::Alloc(_) = store_dest_data.kind() {
+                // indicate this value is in alloc list; we can determine the offset directly
+                let addr = func_ctx.value_table.get_value_addr(&store_dest);
+                if let Some(offset) = addr {
+                    riscv_sw(
+                        store_value_reg,
+                        "sp",
+                        offset,
+                        asm,
+                        &mut func_ctx.value_table,
+                    );
+                } else {
+                    panic!("value is not in stack");
+                }
+            } else {
+                // indicate this value is a pointer; we need to load the value from the stack
+                let dest_ptr_reg =
+                    func_ctx
+                        .value_table
+                        .assign_value_to_reg(&store_dest, store_dest_data, asm);
+                riscv_sw(
+                    store_value_reg,
+                    dest_ptr_reg,
+                    0,
+                    asm,
+                    &mut func_ctx.value_table,
+                );
+                func_ctx.value_table.unlock_reg(&dest_ptr_reg);
+            }
+            func_ctx.value_table.unlock_reg(&store_value_reg);
         }
         ValueKind::Jump(jump) => {
             let jump_bb = jump.target();
             let jump_bb_name = get_bb_name(func_ctx.func_data, jump_bb);
-            asm += &format!("  j {}\n", jump_bb_name);
-            asm
+            func_ctx.value_table.free_regs(&REG_LIST.to_vec(), asm);
+            asm.push_str(&format!("  j {}\n", jump_bb_name));
         }
         ValueKind::Branch(branch) => {
             let cond_value = branch.cond();
-            let cond_asm = child_value_to_asm(cond_value, func_ctx);
-            asm += &cond_asm;
-            let (cond_reg_asm, cond_reg) = func_ctx.load_value_to_reg(cond_value);
-            asm += &cond_reg_asm;
+            let cond_value_data = get_value_data(func_data, cond_value);
+            let cond_reg =
+                func_ctx
+                    .value_table
+                    .assign_value_to_reg(&cond_value, cond_value_data, asm);
             let true_bb = branch.true_bb();
             let false_bb = branch.false_bb();
             let true_bb_name = get_bb_name(func_ctx.func_data, true_bb);
             let false_bb_name = get_bb_name(func_ctx.func_data, false_bb);
-            asm += &format!("  bnez {}, {}\n", cond_reg, true_bb_name);
-            asm += &format!("  j {}\n", false_bb_name);
-            func_ctx.reg_value_table.free_reg(cond_reg);
-            asm
+            func_ctx.value_table.unlock_reg(&cond_reg);
+            func_ctx.value_table.free_regs(
+                &REG_LIST
+                    .iter()
+                    .filter(|&&r| r != cond_reg)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                asm,
+            );
+            func_ctx.value_table.free_reg(&cond_reg, asm);
+            asm.push_str(&format!("  bnez {}, {}\n", cond_reg, true_bb_name));
+            asm.push_str(&format!("  j {}\n", false_bb_name));
+            func_ctx.value_table.unlock_reg(&cond_reg);
         }
         _ => {
             panic!("unsupported value kind: {:?}", value_data.kind());
         }
     }
     assert!(func_ctx.value_table.reg_all_unlocked());
-
 }
 
 // pub fn child_value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {

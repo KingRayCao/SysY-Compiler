@@ -1,6 +1,6 @@
 use super::build_value::value_to_asm;
 use super::gen_riscv::*;
-use super::util::RegValueTable;
+use super::util::ValueTable;
 use super::util::*;
 use super::GenerateAsm;
 use super::{Asm, Reg};
@@ -26,30 +26,26 @@ impl GenerateAsm for FunctionData {
 
         let mut func_context = FuncContext::new(self);
         // prologue
-        asm += &format!("{}:\n", &self.name()[1..]);
-        asm += &riscv_bin_op_imm(
+        asm.push_str(&format!("{}:\n", &self.name()[1..]));
+        riscv_bin_op_imm(
             "add",
             "sp",
             "sp",
             -(func_context.stack_size as i32),
-            &mut func_context,
+            &mut asm,
+            &mut func_context.value_table,
         );
         // body
         for (&bb, node) in self.layout().bbs() {
             let bb_name = get_bb_name(self, bb);
             if !bb_name.starts_with("entry") {
-                if get_bb_data(func_context.func_data, bb).used_by().is_empty() {
-                    continue;
-                }
-                asm += &format!("\n{}:\n", bb_name);
+                asm.push_str(&format!("\n{}:\n", bb_name));
             }
+            // println!("bb: {}", bb_name);
             for &inst in node.insts().keys() {
-                asm += &value_to_asm(inst, &mut func_context);
+                value_to_asm(inst, &mut asm, &mut func_context);
             }
-            // TODO: release all regs
         }
-        assert!(func_context.reg_all_free());
-        assert!((func_context.current_offset + 15) / 16 * 16 == func_context.stack_size);
         return asm;
     }
 }
@@ -67,7 +63,6 @@ impl<'a> FuncContext<'a> {
         let stack_size = Self::get_stack_size(func_data, &mut func_context);
         func_context.stack_size = stack_size;
         // TODO: 初始化value_table为param
-        todo!()
         func_context
     }
 
@@ -98,19 +93,20 @@ impl<'a> FuncContext<'a> {
     ) -> usize {
         let valuedata = func_data.dfg().value(value);
         // 注意区分TypeKind和ValueKind
-        match valuedata.kind() {
-            ValueKind::Alloc(alloc) => valuedata.ty().size(),
-            ValueKind::Load(_) => valuedata.ty().size(),
-            ValueKind::Integer(_) => valuedata.ty().size(),
-            ValueKind::Binary(bin) => valuedata.ty().size(),
-            ValueKind::Store(store) => valuedata.ty().size(),
-            ValueKind::Call(call) => {
-                func_context.has_call = true;
-                func_context.max_param_num = max(func_context.max_param_num, call.args().len());
-                valuedata.ty().size()
-            }
-            _ => valuedata.ty().size(),
-        }
+        // match valuedata.kind() {
+        //     ValueKind::Alloc(alloc) => valuedata.ty().size(),
+        //     ValueKind::Load(_) => valuedata.ty().size(),
+        //     ValueKind::Integer(_) => valuedata.ty().size(),
+        //     ValueKind::Binary(bin) => valuedata.ty().size(),
+        //     ValueKind::Store(store) => valuedata.ty().size(),
+        //     ValueKind::Call(call) => {
+        //         func_context.has_call = true;
+        //         func_context.max_param_num = max(func_context.max_param_num, call.args().len() as i32);
+        //         valuedata.ty().size()
+        //     }
+        //     _ => valuedata.ty().size(),
+        // }
+        valuedata.ty().size()
     }
 
     // For Debug
