@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use super::const_eval::*;
 use super::*;
 use crate::ast::decl::*;
@@ -62,6 +64,7 @@ impl IrGenerator for ConstDef {
                 // Global Variable
                 let array_value = const_init_array.to_value(program, context);
                 let alloc = program.new_value().global_alloc(array_value);
+                program.set_value_name(alloc, Some(format!("@{}", self.ident)));
                 context
                     .symbol_tables
                     .add_array(&self.ident, array_type, alloc, size);
@@ -157,6 +160,7 @@ impl IrGenerator for VarDef {
                         context
                             .symbol_tables
                             .add_var(&ident, Type::get_i32(), alloc);
+                        program.set_value_name(alloc, Some(format!("@{}", ident)));
                     } else {
                         // Array Variable
                         let size = Array::const_exp2size(index, context);
@@ -167,6 +171,7 @@ impl IrGenerator for VarDef {
                         context
                             .symbol_tables
                             .add_array(&ident, array_type, alloc, size);
+                        program.set_value_name(alloc, Some(format!("@{}", ident)));
                     }
                     Ok(())
                 }

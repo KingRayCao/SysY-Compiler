@@ -2,12 +2,14 @@ use super::build_func::FuncContext;
 use super::gen_riscv::*;
 use super::{Addr, Asm, Reg, REG_LIST};
 use koopa::ir::entities::{BasicBlockData, ValueData};
-use koopa::ir::{BasicBlock, FunctionData, Value, ValueKind};
+use koopa::ir::{BasicBlock, FunctionData, Program, Value, ValueKind};
 use std::collections::HashMap;
+use std::ops::Deref;
 
-pub fn get_value_data(func_data: &FunctionData, value: Value) -> &ValueData {
+pub fn get_value_data<'a>(func_data: &'a FunctionData, value: Value) -> &'a ValueData {
     func_data.dfg().value(value)
 }
+
 pub fn get_bb_data(func_data: &FunctionData, bb: BasicBlock) -> &BasicBlockData {
     func_data.dfg().bb(bb)
 }
@@ -24,6 +26,7 @@ pub enum RegStatus {
 }
 
 pub const PARAM_ADDR: i32 = -1;
+pub const GLOBL_ADDR: i32 = -2;
 
 pub struct ValueTable {
     value_addr: HashMap<Value, Addr>,
@@ -175,17 +178,9 @@ impl ValueTable {
     }
 
     pub fn set_value_to_reg(&mut self, value: &Value, value_data: &ValueData, reg: &Reg) {
-        let addr = self.get_value_addr(value);
-        if let Some(offset) = addr {
-            self.value_reg.insert(*value, Some(reg));
-            self.reg_status.insert(reg, RegStatus::Used(*value));
-            self.lock_reg(reg);
-        } else {
-            // this value is not in stack
-            self.value_reg.insert(*value, Some(reg));
-            self.reg_status.insert(reg, RegStatus::Used(*value));
-            self.lock_reg(reg);
-        }
+        self.value_reg.insert(*value, Some(reg));
+        self.reg_status.insert(reg, RegStatus::Used(*value));
+        self.lock_reg(reg);
     }
 
     pub fn assign_value_to_specified_reg(
@@ -267,7 +262,7 @@ impl ValueTable {
                     *v = RegStatus::Free;
                     self.value_reg.insert(value, None);
                     let addr = self.get_value_addr(&value).unwrap();
-                    if addr != PARAM_ADDR {
+                    if addr != PARAM_ADDR && addr != GLOBL_ADDR {
                         riscv_sw(reg, "sp", addr, asm, self);
                     }
                 }

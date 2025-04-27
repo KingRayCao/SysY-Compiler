@@ -61,25 +61,43 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             func_ctx.current_offset += size;
 
             let src_value = load.src();
-            let src_value_data = get_value_data(func_data, src_value);
+            let (src_value_data, src_is_global) =
+                if func_ctx.func_data.dfg().values().contains_key(&src_value) {
+                    (func_ctx.func_data.dfg().value(src_value).clone(), false)
+                } else {
+                    let value_data = func_ctx.program.borrow_value(src_value);
+                    (value_data.clone(), true)
+                };
             let load_reg = func_ctx.value_table.allocate_value_to_reg(&value, asm);
 
-            if let ValueKind::Alloc(_) = src_value_data.kind() {
-                // indicate this value is in alloc list; we can determine the offset directly
-                let addr = func_ctx.value_table.get_value_addr(&src_value);
-                if let Some(offset) = addr {
-                    riscv_lw(load_reg, "sp", offset, asm, &mut func_ctx.value_table);
-                } else {
-                    panic!("value is not in stack");
-                }
-            } else {
-                // indicate this value is a pointer; we need to load the value from the stack
-                let src_ptr_reg =
-                    func_ctx
-                        .value_table
-                        .assign_value_to_reg(&src_value, src_value_data, asm);
+            if src_is_global {
+                func_ctx.value_table.alloc_value(src_value, GLOBL_ADDR);
+                let globl_name = &src_value_data.name().as_ref().unwrap()[1..];
+                let src_ptr_reg = func_ctx.value_table.allocate_value_to_reg(&src_value, asm);
+                func_ctx
+                    .value_table
+                    .set_value_to_reg(&src_value, &src_value_data, &src_ptr_reg);
+                riscv_la(src_ptr_reg, globl_name, asm);
                 riscv_lw(load_reg, src_ptr_reg, 0, asm, &mut func_ctx.value_table);
                 func_ctx.value_table.unlock_reg(&src_ptr_reg);
+            } else {
+                if let ValueKind::Alloc(_) = src_value_data.kind() {
+                    // indicate this value is in alloc list; we can determine the offset directly
+                    let addr = func_ctx.value_table.get_value_addr(&src_value);
+                    if let Some(offset) = addr {
+                        riscv_lw(load_reg, "sp", offset, asm, &mut func_ctx.value_table);
+                    } else {
+                        panic!("value is not in stack");
+                    }
+                } else {
+                    // indicate this value is a pointer; we need to load the value from the stack
+                    let src_ptr_reg =
+                        func_ctx
+                            .value_table
+                            .assign_value_to_reg(&src_value, &src_value_data, asm);
+                    riscv_lw(load_reg, src_ptr_reg, 0, asm, &mut func_ctx.value_table);
+                    func_ctx.value_table.unlock_reg(&src_ptr_reg);
+                }
             }
             func_ctx.value_table.unlock_reg(&load_reg);
         }
@@ -257,34 +275,30 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
         ValueKind::Store(store) => {
             let store_value = store.value();
             let store_value_data = get_value_data(func_data, store_value);
-            let store_dest = store.dest();
-            let store_dest_data = get_value_data(func_data, store_dest);
-
             let store_value_reg =
                 func_ctx
                     .value_table
                     .assign_value_to_reg(&store_value, store_value_data, asm);
-            if let ValueKind::Alloc(_) = store_dest_data.kind() {
-                // indicate this value is in alloc list; we can determine the offset directly
-                let addr = func_ctx.value_table.get_value_addr(&store_dest);
-                if let Some(offset) = addr {
-                    riscv_sw(
-                        store_value_reg,
-                        "sp",
-                        offset,
-                        asm,
-                        &mut func_ctx.value_table,
-                    );
-                    // println!("store {:?} to {}", store_value, offset);
+
+            let store_dest = store.dest();
+            let (store_dest_data, dest_is_global) = {
+                let func_data = func_ctx.func_data;
+                let program = func_ctx.program;
+                if func_data.dfg().values().contains_key(&store_dest) {
+                    (func_data.dfg().value(store_dest).clone(), false)
                 } else {
-                    panic!("value is not in stack");
+                    (program.borrow_value(store_dest).clone(), true)
                 }
-            } else {
-                // indicate this value is a pointer; we need to load the value from the stack
-                let dest_ptr_reg =
-                    func_ctx
-                        .value_table
-                        .assign_value_to_reg(&store_dest, store_dest_data, asm);
+            };
+
+            if dest_is_global {
+                func_ctx.value_table.alloc_value(store_dest, GLOBL_ADDR);
+                let globl_name = &store_dest_data.name().as_ref().unwrap()[1..];
+                let dest_ptr_reg = func_ctx.value_table.allocate_value_to_reg(&store_dest, asm);
+                func_ctx
+                    .value_table
+                    .set_value_to_reg(&store_dest, &store_dest_data, &dest_ptr_reg);
+                riscv_la(dest_ptr_reg, globl_name, asm);
                 riscv_sw(
                     store_value_reg,
                     dest_ptr_reg,
@@ -293,6 +307,38 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
                     &mut func_ctx.value_table,
                 );
                 func_ctx.value_table.unlock_reg(&dest_ptr_reg);
+            } else {
+                if let ValueKind::Alloc(_) = store_dest_data.kind() {
+                    // indicate this value is in alloc list; we can determine the offset directly
+                    let addr = func_ctx.value_table.get_value_addr(&store_dest);
+                    if let Some(offset) = addr {
+                        riscv_sw(
+                            store_value_reg,
+                            "sp",
+                            offset,
+                            asm,
+                            &mut func_ctx.value_table,
+                        );
+                        // println!("store {:?} to {}", store_value, offset);
+                    } else {
+                        panic!("value is not in stack");
+                    }
+                } else {
+                    // indicate this value is a pointer; we need to load the value from the stack
+                    let dest_ptr_reg = func_ctx.value_table.assign_value_to_reg(
+                        &store_dest,
+                        &store_dest_data,
+                        asm,
+                    );
+                    riscv_sw(
+                        store_value_reg,
+                        dest_ptr_reg,
+                        0,
+                        asm,
+                        &mut func_ctx.value_table,
+                    );
+                    func_ctx.value_table.unlock_reg(&dest_ptr_reg);
+                }
             }
             func_ctx.value_table.unlock_reg(&store_value_reg);
         }

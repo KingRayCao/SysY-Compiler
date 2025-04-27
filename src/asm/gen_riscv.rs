@@ -80,3 +80,7 @@ pub fn riscv_swi(
 pub fn riscv_mv(dest: Reg, src: Reg, asm: &mut Asm) {
     asm.push_str(&format!("  mv {}, {}\n", dest, src));
 }
+
+pub fn riscv_la(dest: Reg, label: &str, asm: &mut Asm) {
+    asm.push_str(&format!("  la {}, {}\n", dest, label));
+}
