@@ -2,7 +2,7 @@ use super::gen_riscv::*;
 use super::util::*;
 use super::{Asm, Reg, REG_LIST};
 use crate::asm::build_func::FuncContext;
-use koopa::ir::{BinaryOp, Value, ValueKind};
+use koopa::ir::{BinaryOp, TypeKind, Value, ValueKind};
 
 pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
     let func_data = func_ctx.func_data;
@@ -23,19 +23,30 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
                     &"a0",
                     asm,
                 );
-                // epilogue
-                riscv_bin_op_imm(
-                    "add",
+            }
+            // epilogue
+            // return
+            func_ctx.value_table.unlock_reg(&"a0");
+            // dont need to write back
+            func_ctx.value_table.free_regs(&REG_LIST.to_vec(), asm);
+            if func_ctx.has_call {
+                riscv_lw(
+                    "ra",
                     "sp",
-                    "sp",
-                    func_ctx.stack_size as i32,
+                    func_ctx.stack_size as i32 - 4,
                     asm,
                     &mut func_ctx.value_table,
                 );
-                // return
-                asm.push_str("  ret\n");
-                func_ctx.value_table.unlock_reg(&ret_value_reg);
             }
+            riscv_bin_op_imm(
+                "add",
+                "sp",
+                "sp",
+                func_ctx.stack_size as i32,
+                asm,
+                &mut func_ctx.value_table,
+            );
+            asm.push_str("  ret\n");
         }
         ValueKind::Alloc(alloc) => {
             let size = value_data.ty().size();
@@ -237,7 +248,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
                         &mut func_ctx.value_table,
                     );
                 }
-                _ => todo!(),
+                _ => unreachable!(),
             };
             func_ctx.value_table.unlock_reg(&lhs_reg);
             func_ctx.value_table.unlock_reg(&rhs_reg);
@@ -248,13 +259,6 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             let store_value_data = get_value_data(func_data, store_value);
             let store_dest = store.dest();
             let store_dest_data = get_value_data(func_data, store_dest);
-            // let store_value_reg = func_ctx.value_table.assign_value_to_reg(&value, asm);
-            // let store_dest_addr = func_ctx.value_addr[&store_dest];
-            // asm += &store_value_asm;
-            // asm += &store_reg_asm;
-            // asm += &riscv_sw(store_reg, "sp", store_dest_addr, func_ctx);
-            // func_ctx.reg_value_table.free_reg(store_reg);
-            // asm
 
             let store_value_reg =
                 func_ctx
@@ -271,6 +275,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
                         asm,
                         &mut func_ctx.value_table,
                     );
+                    // println!("store {:?} to {}", store_value, offset);
                 } else {
                     panic!("value is not in stack");
                 }
@@ -322,25 +327,60 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             asm.push_str(&format!("  j {}\n", false_bb_name));
             func_ctx.value_table.unlock_reg(&cond_reg);
         }
+        ValueKind::Call(call) => {
+            let size = value_data.ty().size();
+            let offset = func_ctx.current_offset as i32;
+            func_ctx.value_table.alloc_value(value, offset);
+            func_ctx.current_offset += size;
+
+            let callee = call.callee();
+            let args = call.args();
+            for (i, arg_value) in args.iter().enumerate() {
+                let arg_value_data = get_value_data(func_data, *arg_value);
+                if i < 8 {
+                    func_ctx.value_table.assign_value_to_specified_reg(
+                        arg_value,
+                        arg_value_data,
+                        &REG_LIST[i],
+                        asm,
+                    );
+                } else {
+                    let arg_reg =
+                        func_ctx
+                            .value_table
+                            .assign_value_to_reg(arg_value, arg_value_data, asm);
+                    riscv_sw(
+                        arg_reg,
+                        "sp",
+                        (i - 8) as i32 * 4,
+                        asm,
+                        &mut func_ctx.value_table,
+                    );
+                    func_ctx.value_table.unlock_reg(&arg_reg);
+                }
+            }
+            let callee_data = func_ctx.program.func(callee);
+            asm.push_str(&format!("  call {}\n", &callee_data.name()[1..]));
+            // println!("call {}", &callee_data.name()[1..]);
+            if let TypeKind::Function(_, ret_type) = callee_data.ty().kind() {
+                if !ret_type.is_unit() {
+                    // return value now in a0
+                    func_ctx
+                        .value_table
+                        .set_value_to_reg(&value, value_data, &"a0");
+                }
+            }
+            for i in 0..args.len() {
+                if i < 8 {
+                    let arg_reg = REG_LIST[i];
+                    func_ctx.value_table.unlock_reg(&arg_reg);
+                }
+            }
+            func_ctx.value_table.unlock_reg(&"a0");
+        }
         _ => {
             panic!("unsupported value kind: {:?}", value_data.kind());
         }
     }
     assert!(func_ctx.value_table.reg_all_unlocked());
 }
-
-// pub fn child_value_to_asm(value: Value, func_ctx: &mut FuncContext) -> Asm {
-//     let func_data = func_ctx.func_data;
-//     let value_data = func_data.dfg().value(value);
-//     // func_ctx.print_value(value);
-//     match value_data.kind() {
-//         ValueKind::Integer(int) => {
-//             let int_reg = func_ctx.reg_value_table.alloc_value(value);
-//             format!("  li {}, {}\n", int_reg, int.value())
-//         }
-//         ValueKind::Binary(_) | ValueKind::Load(_) => String::new(),
-//         _ => {
-//             unreachable!()
-//         }
-//     }
-// }

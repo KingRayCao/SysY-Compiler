@@ -19,15 +19,17 @@ pub fn get_bb_name(func_data: &FunctionData, bb: BasicBlock) -> &str {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RegStatus {
     Free,
-    Used(Addr),
+    Used(Value),
     Temp,
 }
 
+pub const PARAM_ADDR: i32 = -1;
+
 pub struct ValueTable {
-    pub value_addr: HashMap<Value, Addr>,
+    value_addr: HashMap<Value, Addr>,
     reg_status: HashMap<Reg, RegStatus>,
-    addr_reg: HashMap<Addr, Option<Reg>>,
-    pub reg_locked: HashMap<Reg, bool>,
+    value_reg: HashMap<Value, Option<Reg>>,
+    reg_locked: HashMap<Reg, bool>,
 }
 
 impl ValueTable {
@@ -43,7 +45,7 @@ impl ValueTable {
         ValueTable {
             value_addr,
             reg_status,
-            addr_reg,
+            value_reg: addr_reg,
             reg_locked,
         }
     }
@@ -57,8 +59,7 @@ impl ValueTable {
     }
 
     pub fn get_value_reg(&self, value: &Value) -> Option<Reg> {
-        let addr = self.get_value_addr(value).unwrap();
-        self.addr_reg.get(&addr).unwrap().clone()
+        self.value_reg.get(&value).unwrap().clone()
     }
 
     // lock reg, so that it cannot be used by other values
@@ -131,8 +132,8 @@ impl ValueTable {
         if let Some(offset) = addr {
             let reg = self.get_free_reg(asm);
 
-            self.addr_reg.insert(offset, Some(reg));
-            self.reg_status.insert(reg, RegStatus::Used(offset));
+            self.value_reg.insert(*value, Some(reg));
+            self.reg_status.insert(reg, RegStatus::Used(*value));
             self.lock_reg(&reg);
 
             return reg;
@@ -160,8 +161,8 @@ impl ValueTable {
                 if let Some(offset) = addr {
                     let reg = self.get_free_reg(asm);
 
-                    self.addr_reg.insert(offset, Some(reg));
-                    self.reg_status.insert(reg, RegStatus::Used(offset));
+                    self.value_reg.insert(*value, Some(reg));
+                    self.reg_status.insert(reg, RegStatus::Used(*value));
                     self.lock_reg(&reg);
 
                     riscv_lw(reg, "sp", offset, asm, self);
@@ -170,6 +171,20 @@ impl ValueTable {
                     panic!("value is not in stack");
                 }
             }
+        }
+    }
+
+    pub fn set_value_to_reg(&mut self, value: &Value, value_data: &ValueData, reg: &Reg) {
+        let addr = self.get_value_addr(value);
+        if let Some(offset) = addr {
+            self.value_reg.insert(*value, Some(reg));
+            self.reg_status.insert(reg, RegStatus::Used(*value));
+            self.lock_reg(reg);
+        } else {
+            // this value is not in stack
+            self.value_reg.insert(*value, Some(reg));
+            self.reg_status.insert(reg, RegStatus::Used(*value));
+            self.lock_reg(reg);
         }
     }
 
@@ -200,8 +215,8 @@ impl ValueTable {
                 } else {
                     let addr = self.get_value_addr(value);
                     if let Some(offset) = addr {
-                        self.addr_reg.insert(offset, Some(reg));
-                        self.reg_status.insert(reg, RegStatus::Used(offset));
+                        self.value_reg.insert(*value, Some(reg));
+                        self.reg_status.insert(reg, RegStatus::Used(*value));
                         self.lock_reg(&reg);
                         riscv_lw(reg, "sp", offset, asm, self);
                         return reg;
@@ -236,7 +251,7 @@ impl ValueTable {
 
     pub fn alloc_value(&mut self, value: Value, offset: i32) {
         self.value_addr.insert(value, offset);
-        self.addr_reg.insert(offset, None);
+        self.value_reg.insert(value, None);
     }
 
     pub fn free_reg(&mut self, reg: &Reg, asm: &mut Asm) {
@@ -248,10 +263,13 @@ impl ValueTable {
         }
         if let Some(v) = self.reg_status.get_mut(reg) {
             match *v {
-                RegStatus::Used(addr) => {
+                RegStatus::Used(value) => {
                     *v = RegStatus::Free;
-                    self.addr_reg.insert(addr, None);
-                    riscv_sw(reg, "sp", addr, asm, self);
+                    self.value_reg.insert(value, None);
+                    let addr = self.get_value_addr(&value).unwrap();
+                    if addr != PARAM_ADDR {
+                        riscv_sw(reg, "sp", addr, asm, self);
+                    }
                 }
 
                 RegStatus::Temp => {
