@@ -4,7 +4,7 @@ mod build_stmt;
 mod const_eval;
 mod util;
 use crate::ast::*;
-use koopa::ir::{BasicBlock, Function, FunctionData, Program, TypeKind, Value};
+use koopa::ir::{Function, Program, TypeKind};
 use util::*;
 
 pub trait IrGenerator {

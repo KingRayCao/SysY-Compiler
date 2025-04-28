@@ -1,4 +1,4 @@
-use super::{build_func::FuncContext, util::ValueTable, Asm, Reg};
+use super::{util::ValueTable, Asm, Reg};
 
 /*
     Notice:
@@ -28,12 +28,12 @@ pub fn riscv_bin_op(
     src0: Reg,
     src1: Reg,
     asm: &mut Asm,
-    value_table: &mut ValueTable,
+    _value_table: &mut ValueTable,
 ) {
     asm.push_str(&format!("  {} {}, {}, {}\n", op, dest, src0, src1));
 }
 
-pub fn riscv_unary_op(op: &str, dest: Reg, src: Reg, asm: &mut Asm, value_table: &mut ValueTable) {
+pub fn riscv_unary_op(op: &str, dest: Reg, src: Reg, asm: &mut Asm, _value_table: &mut ValueTable) {
     asm.push_str(&format!("  {} {}, {}\n", op, dest, src));
 }
 

@@ -18,18 +18,17 @@ impl IrGenerator for Stmt {
                         Ok(())
                     }
                     LValValue::Const(_) => Err("Assign to constant".to_string()),
-                    LValValue::ArrayElem(array_value, size, index) => {
+                    LValValue::ArrayElem(array_value, _size, index) => {
                         let exp_val = exp.build_ir(program, context)?;
-                        let elem_addr =
-                            get_array_elem_addr(program, context, array_value, &size, &index);
+                        let elem_addr = get_array_elem_addr(program, context, array_value, &index);
                         let store = new_value_builder(program, context).store(exp_val, elem_addr);
                         add_value(program, context, store)?;
                         Ok(())
                     }
-                    LValValue::ArrayParamElem(array_value, size, index) => {
+                    LValValue::ArrayParamElem(array_value, _size, index) => {
                         let exp_val = exp.build_ir(program, context)?;
                         let elem_addr =
-                            get_array_param_elem_addr(program, context, array_value, &size, &index);
+                            get_array_param_elem_addr(program, context, array_value, &index);
                         let store = new_value_builder(program, context).store(exp_val, elem_addr);
                         add_value(program, context, store)?;
                         Ok(())
@@ -38,7 +37,7 @@ impl IrGenerator for Stmt {
             }
             Stmt::ExpStmt(exp) => {
                 if let Some(exp) = exp.as_ref() {
-                    let exp_val = exp.build_ir(program, context)?;
+                    exp.build_ir(program, context)?;
                 }
                 Ok(())
             }
@@ -65,13 +64,13 @@ impl IrGenerator for Stmt {
                         // build then stmt
                         let then_bb = insert_bb(program, context, then_bb);
                         change_current_bb(program, context, then_bb);
-                        let then_stmt_val = then_stmt.build_ir(program, context)?;
+                        then_stmt.build_ir(program, context)?;
                         let then_jump = new_value_builder(program, context).jump(end_bb);
                         add_value(program, context, then_jump)?;
                         // build else stmt
                         let else_bb = insert_bb(program, context, else_bb);
                         change_current_bb(program, context, else_bb);
-                        let else_stmt_val = else_stmt.build_ir(program, context)?;
+                        else_stmt.build_ir(program, context)?;
                         let else_jump = new_value_builder(program, context).jump(end_bb);
                         add_value(program, context, else_jump)?;
                         // build end stmt
@@ -88,7 +87,7 @@ impl IrGenerator for Stmt {
                         // build then stmt
                         let then_bb = insert_bb(program, context, then_bb);
                         change_current_bb(program, context, then_bb);
-                        let then_stmt_val = then_stmt.build_ir(program, context)?;
+                        then_stmt.build_ir(program, context)?;
                         let then_jump = new_value_builder(program, context).jump(end_bb);
                         add_value(program, context, then_jump)?;
                         // build end stmt
@@ -112,7 +111,7 @@ impl IrGenerator for Stmt {
                 context.while_stack.push(while_bb, end_bb);
                 let loop_bb = insert_bb(program, context, loop_bb);
                 change_current_bb(program, context, loop_bb);
-                let loop_stmt_val = stmt.build_ir(program, context)?;
+                stmt.build_ir(program, context)?;
                 let loop_jump = new_value_builder(program, context).jump(while_bb);
                 add_value(program, context, loop_jump)?;
                 context.while_stack.pop();
@@ -122,13 +121,13 @@ impl IrGenerator for Stmt {
                 Ok(())
             }
             Stmt::BreakStmt => {
-                let (while_bb, end_bb) = context.while_stack.get_top().unwrap();
+                let (_while_bb, end_bb) = context.while_stack.get_top().unwrap();
                 let break_jump = new_value_builder(program, context).jump(end_bb);
                 add_value(program, context, break_jump)?;
                 Ok(())
             }
             Stmt::ContinueStmt => {
-                let (while_bb, end_bb) = context.while_stack.get_top().unwrap();
+                let (while_bb, _end_bb) = context.while_stack.get_top().unwrap();
                 let continue_jump = new_value_builder(program, context).jump(while_bb);
                 add_value(program, context, continue_jump)?;
                 Ok(())

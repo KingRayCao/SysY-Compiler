@@ -2,10 +2,8 @@ use super::const_eval::ConstI32Eval;
 use super::*;
 use crate::ast::decl::*;
 use crate::ast::exp::*;
-use crate::ast::stmt::*;
-use key_node_list::Node;
 use koopa::ir::builder::{
-    BasicBlockBuilder, BlockBuilder, GlobalBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
+    BasicBlockBuilder, BlockBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
 };
 use koopa::ir::entities::ValueData;
 use koopa::ir::{BasicBlock, FunctionData, Program, Type, Value, ValueKind};
@@ -214,7 +212,6 @@ pub fn add_value(
     value: Value,
 ) -> Result<(), String> {
     let mut bb = context.current_bb.unwrap();
-    let bb_last_value = get_bb_last_value(program, context);
     // 如果当前bb已经closed，则新建bb
     if bb_closed(program, context, bb) {
         let new_bb = new_bb(program, context, "%new_bb");
@@ -264,15 +261,11 @@ pub fn get_type(program: &Program, context: &IrContext, value: Value) -> Type {
 }
 // ============ Function utils ============
 
-pub fn get_func(program: &Program, context: &IrContext, ident: &str) -> Function {
+pub fn get_func(context: &IrContext, ident: &str) -> Function {
     context.func_table.get(ident).unwrap().clone()
 }
 
-pub fn get_func_data<'a>(
-    program: &'a Program,
-    context: &'a IrContext,
-    func: Function,
-) -> &'a FunctionData {
+pub fn get_func_data<'a>(program: &'a Program, func: Function) -> &'a FunctionData {
     program.func(func)
 }
 
@@ -337,7 +330,6 @@ pub fn get_array_elem_addr(
     program: &mut Program,
     context: &mut IrContext,
     array: Value,
-    size: &Vec<usize>,
     index: &Vec<Value>,
 ) -> Value {
     let mut elem = array;
@@ -352,7 +344,6 @@ pub fn get_array_param_elem_addr(
     program: &mut Program,
     context: &mut IrContext,
     array: Value,
-    size: &Vec<usize>,
     index: &Vec<Value>,
 ) -> Value {
     let mut elem = array;
@@ -420,8 +411,8 @@ impl Array {
         size.iter().product::<usize>()
     }
 
-    pub fn size2type(size: &Vec<usize>) -> Type {
-        let mut ty = Type::get_i32();
+    pub fn size2type(size: &Vec<usize>, btype: Type) -> Type {
+        let mut ty = btype;
         for i in size.iter().rev() {
             ty = Type::get_array(ty, *i as usize);
         }
@@ -435,7 +426,8 @@ impl Array {
         init_val: &ConstInitVal,
         size: &Vec<usize>,
         start_pos: &mut usize,
-    ) {
+    ) -> bool {
+        let mut is_zero = true;
         match init_val {
             ConstInitVal::ConstExp(_) => unreachable!(),
             ConstInitVal::ConstArray(a) => {
@@ -444,6 +436,9 @@ impl Array {
                     match v {
                         ConstInitVal::ConstExp(e) => {
                             let val = e.get_const_i32(context).unwrap();
+                            if val != 0 {
+                                is_zero = false;
+                            }
                             let val = const_int_value(program, context, val);
                             *self.data.get_mut(*start_pos as usize).unwrap() = val;
                             *start_pos = *start_pos + 1;
@@ -460,7 +455,9 @@ impl Array {
                                     break;
                                 }
                             }
-                            self.const_init_to_array(program, context, v, &new_size, start_pos);
+                            is_zero = is_zero
+                                && self
+                                    .const_init_to_array(program, context, v, &new_size, start_pos);
                         }
                     }
                 }
@@ -470,6 +467,7 @@ impl Array {
                     *self.data.get_mut(*start_pos as usize).unwrap() = val_0;
                     *start_pos = *start_pos + 1;
                 }
+                is_zero
             }
         }
     }
@@ -480,7 +478,8 @@ impl Array {
         init_val: &InitVal,
         size: &Vec<usize>,
         start_pos: &mut usize,
-    ) {
+    ) -> bool {
+        let mut is_zero = true;
         match init_val {
             InitVal::Exp(_) => unreachable!(),
             InitVal::Array(a) => {
@@ -489,10 +488,13 @@ impl Array {
                     match v {
                         InitVal::Exp(e) => {
                             let val = if context.is_global {
-                                program
-                                    .new_value()
-                                    .integer(e.get_const_i32(context).unwrap())
+                                let num = e.get_const_i32(context).unwrap();
+                                if num != 0 {
+                                    is_zero = false;
+                                }
+                                program.new_value().integer(num)
                             } else {
+                                is_zero = false;
                                 e.build_ir(program, context).unwrap()
                             };
                             *self.data.get_mut(*start_pos as usize).unwrap() = val;
@@ -510,7 +512,8 @@ impl Array {
                                     break;
                                 }
                             }
-                            self.init_to_array(program, context, v, &new_size, start_pos);
+                            is_zero = is_zero
+                                && self.init_to_array(program, context, v, &new_size, start_pos);
                         }
                     }
                 }
@@ -520,6 +523,7 @@ impl Array {
                     *self.data.get_mut(*start_pos as usize).unwrap() = val_0;
                     *start_pos = *start_pos + 1;
                 }
+                is_zero
             }
         }
     }
@@ -556,7 +560,7 @@ impl Array {
                 .into_iter()
                 .map(|v| const_int_value(program, context, v as i32))
                 .collect();
-            let elem = get_array_elem_addr(program, context, array, &self.size, &index);
+            let elem = get_array_elem_addr(program, context, array, &index);
             let init_val = self.data[i];
             let store = new_value_builder(program, context).store(init_val, elem);
             add_value(program, context, store).unwrap();
@@ -568,28 +572,29 @@ impl Array {
         context: &mut IrContext,
         init_val: &ConstInitVal,
         size: &Vec<usize>,
-    ) -> Array {
+    ) -> (Array, bool) {
         let mut start_pos = 0;
         let mut const_init_array = Array::new(program, context, size);
-        const_init_array.const_init_to_array(program, context, init_val, size, &mut start_pos);
-        const_init_array
+        let is_zero =
+            const_init_array.const_init_to_array(program, context, init_val, size, &mut start_pos);
+        (const_init_array, is_zero)
     }
     pub fn get_init_array(
         program: &mut Program,
         context: &mut IrContext,
         init_val: &InitVal,
         size: &Vec<usize>,
-    ) -> Array {
+    ) -> (Array, bool) {
         let mut start_pos = 0;
         let mut init_array = Array::new(program, context, size);
-        init_array.init_to_array(program, context, init_val, size, &mut start_pos);
-        init_array
+        let is_zero = init_array.init_to_array(program, context, init_val, size, &mut start_pos);
+        (init_array, is_zero)
     }
 }
 
 // ============ Function utils ============
 impl FuncFParam {
-    pub fn to_type(&self, program: &mut Program, context: &mut IrContext) -> Type {
+    pub fn to_type(&self, context: &mut IrContext) -> Type {
         match self {
             FuncFParam::Var(btype, _) => btype.to_type(),
             FuncFParam::Array(btype, _, size) => {
@@ -597,7 +602,7 @@ impl FuncFParam {
                     .iter()
                     .map(|exp| exp.get_const_i32(context).unwrap() as usize)
                     .collect();
-                Type::get_pointer(Array::size2type(&size_val))
+                Type::get_pointer(Array::size2type(&size_val, btype.to_type()))
             }
         }
     }

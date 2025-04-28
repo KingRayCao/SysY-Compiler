@@ -1,4 +1,3 @@
-use super::util::*;
 use super::GenerateAsm;
 use koopa::ir::{Program, ValueKind};
 

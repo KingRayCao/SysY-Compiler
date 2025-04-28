@@ -1,7 +1,7 @@
 use super::util::*;
 use super::*;
 use crate::ast::exp::*;
-use koopa::ir::builder::{EntityInfoQuerier, LocalInstBuilder, ValueBuilder};
+use koopa::ir::builder::LocalInstBuilder;
 use koopa::ir::{BinaryOp, Type, Value};
 
 impl IrGenerator for Exp {
@@ -33,7 +33,6 @@ impl IrGenerator for LVal {
             }
             SymbolTableEntry::Array(_, value, size) => {
                 let mut index: Vec<Value> = Vec::new();
-                let array_value = value;
                 for i in 0..self.index.len() {
                     let index_val = self.index[i].build_ir(program, context)?;
                     index.push(index_val);
@@ -120,7 +119,7 @@ impl IrGenerator for UnaryExp {
                     .iter()
                     .map(|exp| exp.build_ir(program, context).unwrap())
                     .collect();
-                let callee = get_func(program, context, &func_name);
+                let callee = get_func(context, &func_name);
                 let call_val = new_value_builder(program, context).call(callee, params_val);
                 add_value(program, context, call_val)?;
                 Ok(call_val)

@@ -1,7 +1,5 @@
-use super::util::Array;
 use super::{IrContext, SymbolTableEntry};
 use crate::ast::{decl::ConstInitVal, decl::InitVal, exp::*};
-use koopa::ir::Program;
 
 pub trait ConstI32Eval {
     fn get_const_i32(&self, context: &IrContext) -> Result<i32, String>;
@@ -11,7 +9,7 @@ impl ConstI32Eval for ConstInitVal {
     fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
             ConstInitVal::ConstExp(e) => e.get_const_i32(context),
-            ConstInitVal::ConstArray(a) => unreachable!(),
+            ConstInitVal::ConstArray(_) => unreachable!(),
         }
     }
 }
@@ -20,7 +18,7 @@ impl ConstI32Eval for InitVal {
     fn get_const_i32(&self, context: &IrContext) -> Result<i32, String> {
         match self {
             InitVal::Exp(e) => e.get_const_i32(context),
-            InitVal::Array(a) => unreachable!(),
+            InitVal::Array(_) => unreachable!(),
         }
     }
 }

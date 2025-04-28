@@ -1,6 +1,6 @@
 use super::gen_riscv::*;
 use super::util::*;
-use super::{Asm, Reg, REG_LIST};
+use super::{Asm, REG_LIST};
 use crate::asm::build_func::FuncContext;
 use koopa::ir::{BinaryOp, TypeKind, Value, ValueKind};
 
@@ -9,7 +9,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
     let value_data = func_data.dfg().value(value);
     // func_ctx.print_value(value);
     match value_data.kind() {
-        ValueKind::Integer(int) => {
+        ValueKind::Integer(_) => {
             unreachable!()
         }
         ValueKind::Return(ret) => {
@@ -17,7 +17,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             // compile return value
             if let Some(ret_value) = ret_value {
                 let ret_value_data = get_value_data(func_data, ret_value);
-                let ret_value_reg = func_ctx.value_table.assign_value_to_specified_reg(
+                func_ctx.value_table.assign_value_to_specified_reg(
                     &ret_value,
                     ret_value_data,
                     &"a0",
@@ -48,7 +48,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             );
             asm.push_str("  ret\n");
         }
-        ValueKind::Alloc(alloc) => {
+        ValueKind::Alloc(_) => {
             let size = value_data.ty().size();
             let offset = func_ctx.current_offset as i32;
             func_ctx.value_table.alloc_value(value, offset);

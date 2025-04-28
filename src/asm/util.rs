@@ -1,10 +1,8 @@
-use super::build_func::FuncContext;
 use super::gen_riscv::*;
 use super::{Addr, Asm, Reg, REG_LIST};
 use koopa::ir::entities::{BasicBlockData, ValueData};
-use koopa::ir::{BasicBlock, FunctionData, Program, Value, ValueKind};
+use koopa::ir::{BasicBlock, FunctionData, Value, ValueKind};
 use std::collections::HashMap;
-use std::ops::Deref;
 
 pub fn get_value_data<'a>(func_data: &'a FunctionData, value: Value) -> &'a ValueData {
     func_data.dfg().value(value)
@@ -109,7 +107,7 @@ impl ValueTable {
         }
 
         if let None = reg_to_free {
-            for (reg, v) in self.reg_status.iter() {
+            for (reg, _) in self.reg_status.iter() {
                 if !self.reg_is_locked(reg) {
                     reg_to_free = Some(*reg);
                     break;
@@ -132,7 +130,7 @@ impl ValueTable {
         }
         // value in stack
         let addr = self.get_value_addr(value);
-        if let Some(offset) = addr {
+        if let Some(_offset) = addr {
             let reg = self.get_free_reg(asm);
 
             self.value_reg.insert(*value, Some(reg));
@@ -177,7 +175,7 @@ impl ValueTable {
         }
     }
 
-    pub fn set_value_to_reg(&mut self, value: &Value, value_data: &ValueData, reg: &Reg) {
+    pub fn set_value_to_reg(&mut self, value: &Value, _value_data: &ValueData, reg: &Reg) {
         self.value_reg.insert(*value, Some(reg));
         self.reg_status.insert(reg, RegStatus::Used(*value));
         self.lock_reg(reg);
@@ -287,7 +285,7 @@ pub fn print_value_data(value_data: &ValueData) {
     println!("size: {:?}", value_data.ty().size());
 }
 
-pub fn print_value(func_data: &FunctionData, func_ctx: &FuncContext, value: Value) {
+pub fn print_value(func_data: &FunctionData, value: Value) {
     let value_data = get_value_data(func_data, value);
     print_value_data(value_data);
 }
