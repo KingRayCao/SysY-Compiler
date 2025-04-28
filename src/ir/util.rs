@@ -455,9 +455,9 @@ impl Array {
                                     break;
                                 }
                             }
-                            is_zero = is_zero
-                                && self
-                                    .const_init_to_array(program, context, v, &new_size, start_pos);
+                            is_zero = self
+                                .const_init_to_array(program, context, v, &new_size, start_pos)
+                                && is_zero;
                         }
                     }
                 }
@@ -512,8 +512,8 @@ impl Array {
                                     break;
                                 }
                             }
-                            is_zero = is_zero
-                                && self.init_to_array(program, context, v, &new_size, start_pos);
+                            is_zero = self.init_to_array(program, context, v, &new_size, start_pos)
+                                && is_zero;
                         }
                     }
                 }
