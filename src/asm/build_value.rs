@@ -1,4 +1,5 @@
 use core::panic;
+use std::cmp::min;
 
 use super::gen_riscv::*;
 use super::util::*;
@@ -16,7 +17,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             unreachable!()
         }
         ValueKind::Return(ret) => {
-            // asm.push_str("  # return\n");
+            asm.push_str("  # return\n");
             let ret_value = ret.value();
             // compile return value
             if let Some(ret_value) = ret_value {
@@ -51,13 +52,14 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             asm.push_str("  ret\n");
         }
         ValueKind::Alloc(alloc) => {
+            asm.push_str("  # alloc\n");
             let size = get_alloc_size(value_data);
             let offset = func_ctx.current_offset as i32;
             func_ctx.value_table.alloc_value(value, offset);
             func_ctx.current_offset += size;
         }
         ValueKind::Load(load) => {
-            // asm.push_str("  # load\n");
+            asm.push_str("  # load\n");
             let size = value_data.ty().size();
             let offset = func_ctx.current_offset as i32;
             func_ctx.value_table.alloc_value(value, offset);
@@ -101,6 +103,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             func_ctx.value_table.unlock_reg(&load_reg);
         }
         ValueKind::Binary(bin) => {
+            asm.push_str("  # binary\n");
             let size = value_data.ty().size();
             let offset = func_ctx.current_offset as i32;
             func_ctx.value_table.alloc_value(value, offset);
@@ -272,6 +275,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             func_ctx.value_table.unlock_reg(&dest_reg);
         }
         ValueKind::Store(store) => {
+            asm.push_str("  # store\n");
             let store_value = store.value();
             let store_value_data = get_value_data(func_data, store_value);
             let store_value_reg =
@@ -338,12 +342,14 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             func_ctx.value_table.unlock_reg(&store_value_reg);
         }
         ValueKind::Jump(jump) => {
+            asm.push_str("  # jump\n");
             let jump_bb = jump.target();
             let jump_bb_name = get_bb_name(func_ctx.func_data, jump_bb);
             func_ctx.value_table.free_regs(&REG_LIST.to_vec(), asm);
             asm.push_str(&format!("  j {}\n", jump_bb_name));
         }
         ValueKind::Branch(branch) => {
+            asm.push_str("  # branch\n");
             let cond_value = branch.cond();
             let cond_value_data = get_value_data(func_data, cond_value);
             let cond_reg =
@@ -369,6 +375,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             func_ctx.value_table.unlock_reg(&cond_reg);
         }
         ValueKind::Call(call) => {
+            asm.push_str("  # call\n");
             let size = value_data.ty().size();
             let offset = func_ctx.current_offset as i32;
             func_ctx.value_table.alloc_value(value, offset);
@@ -376,6 +383,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
 
             let callee = call.callee();
             let args = call.args();
+            let reg_to_be_freed: Vec<&str> = REG_LIST[min(args.len(), 8)..].to_vec();
             for (i, arg_value) in args.iter().enumerate() {
                 let arg_value_data = get_value_data(func_data, *arg_value);
                 if i < 8 {
@@ -400,6 +408,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
                     func_ctx.value_table.unlock_reg(&arg_reg);
                 }
             }
+            func_ctx.value_table.free_regs(&reg_to_be_freed, asm);
             let callee_data = func_ctx.program.func(callee);
             asm.push_str(&format!("  call {}\n", &callee_data.name()[1..]));
             // println!("call {}", &callee_data.name()[1..]);
@@ -421,7 +430,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
         }
 
         ValueKind::GetElemPtr(get_elem_ptr) => {
-            // asm.push_str("  # get_elem_ptr\n");
+            asm.push_str("  # get_elem_ptr\n");
             let size = value_data.ty().size();
             let offset = func_ctx.current_offset as i32;
             func_ctx.value_table.alloc_value(value, offset);
@@ -534,6 +543,7 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
             func_ctx.value_table.unlock_reg(&dest_reg);
         }
         ValueKind::GetPtr(get_ptr) => {
+            asm.push_str("  # get_ptr\n");
             let size = value_data.ty().size();
             let offset = func_ctx.current_offset as i32;
             func_ctx.value_table.alloc_value(value, offset);
