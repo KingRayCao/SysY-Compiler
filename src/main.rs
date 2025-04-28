@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             let mut output = std::fs::File::create(output)?;
             write!(output, "{}", koopa_str)?;
         }
-        "-riscv" => {
+        "-riscv" | "-perf" => {
             let mut output = std::fs::File::create(output)?;
             let asm_str = koopa_to_asm(&koopa_program);
             write!(output, "{}", asm_str)?;
