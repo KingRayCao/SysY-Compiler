@@ -126,16 +126,9 @@ impl GenerateAsm for FunctionData {
             "sp",
             -(func_context.stack_size as i32),
             &mut asm,
-            &mut func_context.value_table,
         );
         if func_context.has_call {
-            riscv_sw(
-                "ra",
-                "sp",
-                func_context.stack_size as i32 - 4,
-                &mut asm,
-                &mut func_context.value_table,
-            );
+            riscv_sw("ra", "sp", func_context.stack_size as i32 - 4, &mut asm);
         }
         func_context.current_offset = max(func_context.max_param_num - 8, 0) as usize * 4;
         // body
@@ -144,7 +137,6 @@ impl GenerateAsm for FunctionData {
             if !bb_name.starts_with("entry") {
                 asm.push_str(&format!("\n{}:\n", bb_name));
             }
-            // println!("bb: {}", bb_name);
             for &inst in node.insts().keys() {
                 value_to_asm(inst, &mut asm, &mut func_context);
             }

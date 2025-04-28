@@ -168,7 +168,7 @@ impl ValueTable {
                     self.reg_status.insert(reg, RegStatus::Used(*value));
                     self.lock_reg(&reg);
 
-                    riscv_lw(reg, "sp", offset, asm, self);
+                    riscv_lw(reg, "sp", offset, asm);
                     return reg;
                 } else {
                     panic!("value is not in stack");
@@ -218,7 +218,7 @@ impl ValueTable {
                         self.value_reg.insert(*value, Some(reg));
                         self.reg_status.insert(reg, RegStatus::Used(*value));
                         self.lock_reg(&reg);
-                        riscv_lw(reg, "sp", offset, asm, self);
+                        riscv_lw(reg, "sp", offset, asm);
                         return reg;
                     } else {
                         panic!("value is not in stack");
@@ -255,7 +255,6 @@ impl ValueTable {
     }
 
     pub fn free_reg(&mut self, reg: &Reg, asm: &mut Asm) {
-        // println!("free reg: {:?}", reg);
         if *reg == "x0" {
             return;
         }
@@ -270,7 +269,7 @@ impl ValueTable {
                     self.value_reg.insert(value, None);
                     let addr = self.get_value_addr(&value).unwrap();
                     if addr != PARAM_ADDR && addr != GLOBL_ADDR {
-                        riscv_sw(reg, "sp", addr, asm, self);
+                        riscv_sw(reg, "sp", addr, asm);
                     }
                 }
 
@@ -298,7 +297,7 @@ pub fn aggregate_to_asm(prog: &Program, aggregate: &Aggregate, asm: &mut Asm) {
             ValueKind::Integer(num) => {
                 asm.push_str(&format!("  .word {}\n", num.value()));
             }
-            ValueKind::ZeroInit(zeroinit) => {
+            ValueKind::ZeroInit(_) => {
                 let size = elem_data.ty().size();
                 asm.push_str(&format!("  .zero {}\n", size));
             }

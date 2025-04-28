@@ -1,6 +1,5 @@
 use super::util::aggregate_to_asm;
-use super::{Asm, GenerateAsm};
-use koopa::ir::values::Aggregate;
+use super::GenerateAsm;
 use koopa::ir::{Program, ValueKind};
 
 pub fn prog_to_asm(prog: &Program) -> String {
@@ -20,7 +19,7 @@ pub fn prog_to_asm(prog: &Program) -> String {
                     ValueKind::Integer(num) => {
                         result += &format!("  .word {}\n", num.value());
                     }
-                    ValueKind::ZeroInit(zeroinit) => {
+                    ValueKind::ZeroInit(_) => {
                         let size = init_data.ty().size();
                         result += &format!("  .zero {}\n", size);
                     }
