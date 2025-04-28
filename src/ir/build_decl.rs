@@ -190,6 +190,7 @@ impl IrGenerator for VarDef {
                         context
                             .symbol_tables
                             .add_var(&ident, Type::get_i32(), alloc);
+                        program.set_value_name(alloc, Some(format!("@{}", ident)));
                     } else {
                         // Array Variable
                         let size = Array::const_exp2size(index, context);
@@ -208,6 +209,7 @@ impl IrGenerator for VarDef {
                         context
                             .symbol_tables
                             .add_array(&ident, array_type, alloc, size);
+                        program.set_value_name(alloc, Some(format!("@{}", ident)));
                     }
                     Ok(())
                 }

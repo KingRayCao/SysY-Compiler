@@ -74,9 +74,6 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
                 func_ctx.value_table.alloc_value(src_value, GLOBL_ADDR);
                 let globl_name = &src_value_data.name().as_ref().unwrap()[1..];
                 let src_ptr_reg = func_ctx.value_table.allocate_value_to_reg(&src_value, asm);
-                func_ctx
-                    .value_table
-                    .set_value_to_reg(&src_value, &src_value_data, &src_ptr_reg);
                 riscv_la(src_ptr_reg, globl_name, asm);
                 riscv_lw(load_reg, src_ptr_reg, 0, asm, &mut func_ctx.value_table);
                 func_ctx.value_table.unlock_reg(&src_ptr_reg);
@@ -295,9 +292,6 @@ pub fn value_to_asm(value: Value, asm: &mut Asm, func_ctx: &mut FuncContext) {
                 func_ctx.value_table.alloc_value(store_dest, GLOBL_ADDR);
                 let globl_name = &store_dest_data.name().as_ref().unwrap()[1..];
                 let dest_ptr_reg = func_ctx.value_table.allocate_value_to_reg(&store_dest, asm);
-                func_ctx
-                    .value_table
-                    .set_value_to_reg(&store_dest, &store_dest_data, &dest_ptr_reg);
                 riscv_la(dest_ptr_reg, globl_name, asm);
                 riscv_sw(
                     store_value_reg,

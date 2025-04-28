@@ -23,9 +23,10 @@ pub fn prog_to_asm(prog: &Program) -> String {
             }
             _ => unreachable!(),
         }
+        result += "\n";
     }
 
-    result += "\n  .text\n";
+    result += "  .text\n";
     result += "  .globl main\n";
     for &func in prog.func_layout() {
         result = result + &prog.func(func).to_asm(prog);
