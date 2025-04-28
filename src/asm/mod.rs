@@ -7,9 +7,10 @@ use koopa::ir::Program;
 
 /*
     t0 ~ t6, a0 ~ a7 available
+    t6 is used for large imm value
 */
-static REG_LIST: [&str; 15] = [
-    "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "t0", "t1", "t2", "t3", "t4", "t5", "t6",
+static REG_LIST: [&str; 14] = [
+    "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "t0", "t1", "t2", "t3", "t4", "t5",
 ];
 
 pub trait GenerateAsm {

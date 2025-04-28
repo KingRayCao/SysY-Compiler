@@ -1,7 +1,9 @@
 use super::gen_riscv::*;
 use super::{Addr, Asm, Reg, REG_LIST};
 use koopa::ir::entities::{BasicBlockData, ValueData};
-use koopa::ir::{BasicBlock, FunctionData, Value, ValueKind};
+use koopa::ir::types::TypeKind;
+use koopa::ir::values::Aggregate;
+use koopa::ir::{BasicBlock, FunctionData, Program, Value, ValueKind};
 use std::collections::HashMap;
 
 pub fn get_value_data<'a>(func_data: &'a FunctionData, value: Value) -> &'a ValueData {
@@ -92,7 +94,7 @@ impl ValueTable {
 
     pub fn get_free_reg(&mut self, asm: &mut Asm) -> Reg {
         for (reg, v) in self.reg_status.iter() {
-            if *v == RegStatus::Free {
+            if *v == RegStatus::Free && !self.reg_is_locked(reg) {
                 return reg;
             }
         }
@@ -196,6 +198,7 @@ impl ValueTable {
             _ => {
                 if let Some(value_reg) = self.get_value_reg(value) {
                     if value_reg == *reg {
+                        self.lock_reg(reg);
                         return *reg;
                     }
                 }
@@ -204,6 +207,10 @@ impl ValueTable {
                 // load value to specified reg
                 if let Some(value_reg) = self.get_value_reg(value) {
                     riscv_mv(reg, value_reg, asm);
+                    self.value_reg.insert(*value, Some(reg));
+                    self.reg_status.insert(reg, RegStatus::Used(*value));
+                    self.reg_status.insert(value_reg, RegStatus::Free);
+                    self.lock_reg(reg);
                     return reg;
                 } else {
                     let addr = self.get_value_addr(value);
@@ -248,12 +255,14 @@ impl ValueTable {
     }
 
     pub fn free_reg(&mut self, reg: &Reg, asm: &mut Asm) {
+        // println!("free reg: {:?}", reg);
         if *reg == "x0" {
             return;
         }
         if self.reg_is_locked(reg) {
             panic!("reg is locked");
         }
+        self.lock_reg(reg);
         if let Some(v) = self.reg_status.get_mut(reg) {
             match *v {
                 RegStatus::Used(value) => {
@@ -271,6 +280,7 @@ impl ValueTable {
                 RegStatus::Free => {}
             }
         }
+        self.unlock_reg(reg);
     }
     pub fn free_regs(&mut self, regs: &Vec<Reg>, asm: &mut Asm) {
         for reg in regs {
@@ -278,6 +288,53 @@ impl ValueTable {
         }
     }
 }
+
+// ================== Array ====================
+
+pub fn aggregate_to_asm(prog: &Program, aggregate: &Aggregate, asm: &mut Asm) {
+    for elem in aggregate.elems().iter() {
+        let elem_data = prog.borrow_value(*elem);
+        match elem_data.kind() {
+            ValueKind::Integer(num) => {
+                asm.push_str(&format!("  .word {}\n", num.value()));
+            }
+            ValueKind::ZeroInit(zeroinit) => {
+                let size = elem_data.ty().size();
+                asm.push_str(&format!("  .zero {}\n", size));
+            }
+            ValueKind::Aggregate(aggr) => {
+                aggregate_to_asm(prog, aggr, asm);
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+pub fn get_elem_ptr_step(array_data: &ValueData) -> usize {
+    match array_data.ty().kind() {
+        TypeKind::Pointer(ty) => match ty.kind() {
+            TypeKind::Array(ty, _size) => ty.size(),
+            TypeKind::Pointer(ty) => ty.size(),
+            _ => {
+                panic!("array step error");
+            }
+        },
+        _ => {
+            panic!("array step error");
+        }
+    }
+}
+
+pub fn get_ptr_step(array_data: &ValueData) -> usize {
+    match array_data.ty().kind() {
+        TypeKind::Pointer(ty) => ty.size(),
+        _ => {
+            panic!("array step error");
+        }
+    }
+}
+
+// ================= Debug ==================
 
 pub fn print_value_data(value_data: &ValueData) {
     println!("kind: {:?}", value_data.kind());

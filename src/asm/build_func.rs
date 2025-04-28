@@ -5,7 +5,7 @@ use super::Asm;
 use super::GenerateAsm;
 use super::REG_LIST;
 use koopa::ir::entities::ValueData;
-use koopa::ir::{FunctionData, Program, Value, ValueKind};
+use koopa::ir::{FunctionData, Program, TypeKind, Value, ValueKind};
 use std::cmp::max;
 
 pub struct FuncContext<'a> {
@@ -47,6 +47,10 @@ impl<'a> FuncContext<'a> {
                     .alloc_value(value, (stack_size + (i - 8) * 4) as i32);
             }
         }
+        // 初始化全局变量
+        for &globl_var in prog.inst_layout() {
+            func_context.value_table.alloc_value(globl_var, GLOBL_ADDR);
+        }
         func_context
     }
 
@@ -81,7 +85,11 @@ impl<'a> FuncContext<'a> {
 
     pub fn get_value_stack_size(func_data: &FunctionData, value: Value) -> usize {
         let valuedata = func_data.dfg().value(value);
-        valuedata.ty().size()
+        if let ValueKind::Alloc(_) = valuedata.kind() {
+            get_alloc_size(valuedata)
+        } else {
+            valuedata.ty().size()
+        }
     }
 
     // For Debug
@@ -92,7 +100,15 @@ impl<'a> FuncContext<'a> {
     }
 }
 
+pub fn get_alloc_size(value_data: &ValueData) -> usize {
+    match value_data.ty().kind() {
+        TypeKind::Pointer(ty) => ty.size(),
+        _ => unreachable!(),
+    }
+}
+
 // ================= FunctionData to Asm =======================
+
 impl GenerateAsm for FunctionData {
     fn to_asm(&self, prog: &Program) -> Asm {
         if self.layout().bbs().len() == 0 {
